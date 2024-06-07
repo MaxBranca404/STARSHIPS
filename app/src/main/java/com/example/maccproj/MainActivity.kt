@@ -10,8 +10,10 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.media.MediaPlayer
+import android.media.PlaybackParams
 import android.os.Build
 import android.os.Bundle
+import android.os.CountDownTimer
 import android.os.Handler
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -36,8 +38,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.MaterialTheme
@@ -52,6 +57,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.paint
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -107,7 +113,7 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window,false)
         requestedOrientation = SCREEN_ORIENTATION_LANDSCAPE
 
-        mediaPlayer = MediaPlayer.create(this, R.raw.soundtrack) //imposta soundtrack del gioco
+        mediaPlayer = MediaPlayer.create(this, R.raw.soundtrack) //imposta audio del menu
         mediaPlayer.isLooping = true // Riproduzione in loop
         mediaPlayer.start()
 
@@ -167,7 +173,7 @@ fun MenuScreen(navController: NavController, buttonMediaPlayer: MediaPlayer){
             //Image(painter = painterResource(id = R.drawable.logo), contentDescription = null,
             //    modifier = Modifier.scale(1f)) //aggiungi un logo al centro del menu
 
-            Spacer(modifier = Modifier.height(100.dp))
+            Spacer(modifier = Modifier.height(180.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically){
                 ElevatedButton(onClick = {
@@ -226,13 +232,46 @@ fun HighscoreScreen(name: String, navController: NavController, buttonMediaPlaye
 @Composable
 fun ARScreen(navController: NavController, buttonMediaPlayer: MediaPlayer) {
 
+    var playerscore by remember { mutableStateOf(0) }
+
+    var timeLeft by remember { mutableStateOf(20000L) }
+    var isTimerRunning by remember { mutableStateOf(false) }
+    var showPopup by remember { mutableStateOf(false) }
+
+    isTimerRunning = true
+
+    fun onCountdownEnd() {
+        showPopup = true
+    }
+
+    // Countdown timer logic
+    LaunchedEffect(isTimerRunning) {
+        if (isTimerRunning) {
+            object : CountDownTimer(timeLeft, 1000) {
+                override fun onTick(millisUntilFinished: Long) {
+                    timeLeft = millisUntilFinished
+                }
+
+                override fun onFinish() {
+                    isTimerRunning = false
+                    // Perform the action when the countdown ends
+                    onCountdownEnd()
+                }
+            }.start()
+        }
+    }
+
+
+
     val mContext = LocalContext.current
     val laserMediaPlayer = MediaPlayer.create(mContext, R.raw.laser)
+    //val gameMediaPlayer = MediaPlayer.create(mContext, R.raw.soundtrack)
 
     ARScene(
 
     )
 
+    // Box for foreground (spaceship's cockpit)
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -244,14 +283,124 @@ fun ARScreen(navController: NavController, buttonMediaPlayer: MediaPlayer) {
 
     )
 
-    ElevatedButton(onClick = {
-        laserMediaPlayer.start()
-    },
-        modifier = Modifier.width(150.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Color(31, 111, 139, 255)),
-        border = BorderStroke(2.dp, Color(22, 89, 112, 120))
+    // Box for Fire! button
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.BottomEnd
     ) {
-        Text("FIRE!",fontWeight = FontWeight.Bold)
+        ElevatedButton(
+            onClick = {
+                if (laserMediaPlayer.isPlaying) {
+                    laserMediaPlayer.stop()
+                    laserMediaPlayer.prepare()
+                }
+                laserMediaPlayer.start()
+                playerscore += 1
+            },
+            modifier = Modifier
+                .padding(0.dp, 0.dp, 10.dp, 120.dp)
+                .size(120.dp), // Makes the button circular by setting equal width and height
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+            border = BorderStroke(5.dp, Color(209, 72, 61, 120)),
+            shape = CircleShape // Applies a circular shape to the button
+        ) {
+            Text("FIRE!",
+                fontSize = 20.sp,
+                color = Color.White,
+                fontWeight = FontWeight.Bold)
+        }
+    }
+
+    // Box for countdown
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.BottomStart
+    ) {
+        if (isTimerRunning) {
+            if(timeLeft/1000 < 10){
+                Text(
+                    text = "0${timeLeft / 1000}",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 40.sp,
+                    color = Color.White,
+                    modifier = Modifier
+                        .padding(30.dp,0.dp,0.dp,30.dp)
+                        .rotate(25f)
+                )
+            }else{
+                Text(
+                    text = "${timeLeft / 1000}",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 40.sp,
+                    color = Color.White,
+                    modifier = Modifier
+                        .padding(30.dp,0.dp,0.dp,30.dp)
+                        .rotate(25f)
+                )
+            }
+
+        }
+    }
+
+    // Box for player score
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.BottomEnd
+    ) {
+        if(playerscore < 10){
+            Text(
+                text = "0${playerscore}",
+                fontWeight = FontWeight.Bold,
+                fontSize = 40.sp,
+                color = Color.White,
+                modifier = Modifier
+                    .padding(0.dp,0.dp,30.dp,30.dp)
+                    .rotate(-25f)
+            )
+        }else{
+            Text(
+                text = "${playerscore}",
+                fontWeight = FontWeight.Bold,
+                fontSize = 40.sp,
+                color = Color.White,
+                modifier = Modifier
+                    .padding(0.dp,0.dp,30.dp,30.dp)
+                    .rotate(-25f)
+            )
+        }
+    }
+
+    // Open the popup menu when the countdown ends
+    if (showPopup) {
+        AlertDialog(
+            onDismissRequest = { showPopup = false },
+            title = { Text(text = "Game Over", fontWeight = FontWeight.Bold, fontSize = 24.sp) },
+            text = {
+                Column {
+                    Text("Player's Points: ${playerscore}", fontSize = 20.sp) // Replace with actual points
+                }
+            },
+            confirmButton = {
+                ElevatedButton(onClick = {
+                        showPopup = false
+                        navController.navigate("arscreen") { // Replace "current_screen" with your current screen route
+                            popUpTo("arscreen") { inclusive = true }
+                        }
+                    }
+                ) {
+                    Text("Restart Game")
+                }
+            },
+            dismissButton = {
+                ElevatedButton(onClick = {
+                        showPopup = false
+                        navController.navigate("menu") // Replace "menu" with your menu screen route
+                    }
+                ) {
+                    Text("Go to Menu")
+                }
+            }
+        )
     }
 
 }
