@@ -203,20 +203,6 @@ fun MenuScreen(navController: NavController, buttonMediaPlayer: MediaPlayer){
 
 
 @Composable
-fun Greeting(name: String, navController: NavController, buttonMediaPlayer: MediaPlayer, modifier: Modifier = Modifier) {
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
-    ){
-        Text(
-            text = "Hello $name!",
-            modifier = modifier
-        )
-    }
-}
-
-
-@Composable
 fun HighscoreScreen(name: String, navController: NavController, buttonMediaPlayer: MediaPlayer, modifier: Modifier = Modifier) {
     val mContext = LocalContext.current
     val laserMediaPlayer = MediaPlayer.create(mContext, R.raw.laser)
