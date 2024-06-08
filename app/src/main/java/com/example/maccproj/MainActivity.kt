@@ -304,7 +304,7 @@ fun HighscoreScreen(name: String, navController: NavController, buttonMediaPlaye
     LaunchedEffect(Unit) {
         coroutineScope.launch {
             try {
-                val response = RetroAPI.retrofitService.helloWorld()
+                val response = RetroAPI.retrofitService.getTopScores()
                 helloWorldText = response.toString()
             } catch (e: Exception) {
                 helloWorldText = "Error: ${e.message}"

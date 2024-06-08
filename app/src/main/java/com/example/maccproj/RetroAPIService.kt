@@ -40,7 +40,7 @@ interface RetroAPIService {
     suspend fun updateMaxScore(@Body data: JsonObject): Call<JsonObject>
 
     @GET("/top_scores")
-    suspend fun getTopScores(): Call<List<JsonObject>>
+    fun getTopScores(): Call<List<JsonObject>>
 
     @GET("/get_maxscore")
     suspend fun getMaxScore(@Query("username") username: String): Call<JsonObject>
