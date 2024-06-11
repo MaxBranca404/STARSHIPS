@@ -59,6 +59,32 @@ import androidx.navigation.compose.rememberNavController
 import com.example.maccproj.ui.theme.MACCProjTheme
 import com.google.gson.JsonObject
 import io.github.sceneview.ar.ARScene
+import io.github.sceneview.animation.Transition.animateRotation
+import io.github.sceneview.ar.ARScene
+import io.github.sceneview.ar.arcore.createAnchorOrNull
+import io.github.sceneview.ar.arcore.isValid
+import io.github.sceneview.ar.node.AnchorNode
+import io.github.sceneview.ar.rememberARCameraNode
+import io.github.sceneview.loaders.MaterialLoader
+import io.github.sceneview.loaders.ModelLoader
+import io.github.sceneview.math.Rotation
+import io.github.sceneview.model.ModelInstance
+import io.github.sceneview.node.CubeNode
+import io.github.sceneview.node.ModelNode
+import io.github.sceneview.rememberCollisionSystem
+import io.github.sceneview.rememberEngine
+import io.github.sceneview.rememberMaterialLoader
+import com.google.android.filament.Engine
+import com.google.ar.core.Anchor
+import com.google.ar.core.Config
+import com.google.ar.core.Frame
+import com.google.ar.core.TrackingFailureReason
+import dev.romainguy.kotlin.math.pow
+import io.github.sceneview.rememberModelLoader
+import io.github.sceneview.rememberNode
+import io.github.sceneview.rememberNodes
+import io.github.sceneview.rememberOnGestureListener
+import io.github.sceneview.rememberView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -66,6 +92,7 @@ import retrofit2.Callback
 import retrofit2.Response
 import java.io.IOException
 import androidx.compose.runtime.LaunchedEffect as LaunchedEffect
+import kotlin.random.Random
 
 class MainActivity : ComponentActivity() {
 
@@ -365,9 +392,83 @@ fun ARScreen(navController: NavController, buttonMediaPlayer: MediaPlayer) {
 
     val mContext = LocalContext.current
     val laserMediaPlayer = MediaPlayer.create(mContext, R.raw.laser)
-    //val gameMediaPlayer = MediaPlayer.create(mContext, R.raw.soundtrack)
+    val engine = rememberEngine()
+    val modelLoader = rememberModelLoader(engine)
+    val model = modelLoader.createModel("model.glb")
+    var frame by remember { mutableStateOf<Frame?>(null) }
+    val childNodes = rememberNodes()
+    val cameraNode = rememberARCameraNode(engine)
+    val view = rememberView(engine)
+    val collisionSystem = rememberCollisionSystem(view)
+    var planeRenderer by remember { mutableStateOf(true) }
+    val modelInstances = remember { mutableListOf<ModelInstance>() }
+    var modelInstancesShips = remember { mutableListOf<ModelInstance>() }
+    var trackingFailureReason by remember {
+        mutableStateOf<TrackingFailureReason?>(null)
+    }
+    /*
+    var sensorManager: SensorManager? = null
+    var accelerometer: Sensor? = null
+    var gyroscope: Sensor? = null
+    val gyroscopeValues = FloatArray(3)
+    var lastTimestamp: Long = 0
+    var tiltDetected = false
+    val context = LocalContext.current
+    sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+
+    accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+    gyroscope = sensorManager?.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+    */
 
     ARScene(
+        modifier = Modifier.fillMaxSize(),
+        childNodes = childNodes,
+        engine = engine,
+        view = view,
+        modelLoader = modelLoader,
+        collisionSystem = collisionSystem,
+        sessionConfiguration = { session, config ->
+            config.depthMode =
+                when (session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)) {
+                    true -> Config.DepthMode.AUTOMATIC
+                    else -> Config.DepthMode.DISABLED
+                }
+            config.instantPlacementMode = Config.InstantPlacementMode.LOCAL_Y_UP
+            config.lightEstimationMode =
+                Config.LightEstimationMode.ENVIRONMENTAL_HDR
+        },
+        cameraNode = cameraNode,
+        planeRenderer = planeRenderer,
+        onTrackingFailureChanged = {
+            trackingFailureReason = it
+        },
+        onSessionCreated = { session ->
+
+           var shipNode = ModelNode(
+                modelInstance = modelInstancesShips.apply {
+                    if (isEmpty()) {
+                        //inserici il path del modello!!!!!!
+                        this += modelLoader.createInstancedModel(kModelFile_Rod, 2)
+                            /*
+                            .apply{
+                            val randomX = random.nextFloat() * 2 - 1 // Random number between -1 and 1
+                            val randomY = random.nextFloat() * 2 - 1 // Random number between -1 and 1
+                            val randomZ = random.nextFloat() * 2 - 1 // Random number between -1 and 1
+                            position = Position(randomX,randoY,randomZ)
+                        }*/
+                    }
+                }.removeLast(),
+                // Scale to fit in a 0.5 meters cube
+                scaleToUnits = 1.0f
+
+            )
+            //val anchornode = AnchorNode(engine = engine, anchor = anchor)
+            //anchornode.addChildNode(rodNode)
+            childNodes += shipNode
+
+        },
+        onSessionUpdated = { session, updatedFrame ->
+            }
 
     )
 

@@ -71,6 +71,7 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+    implementation("io.github.sceneview:sceneview:2.2.1")
     implementation("io.github.sceneview:arsceneview:2.0.2")
     implementation( "com.google.code.gson:gson:2.8.8")
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
