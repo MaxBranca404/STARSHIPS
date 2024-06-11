@@ -8,9 +8,11 @@ import android.util.JsonReader
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -67,9 +69,14 @@ import retrofit2.Response
 import java.io.IOException
 import androidx.compose.runtime.LaunchedEffect as LaunchedEffect
 
-class MainActivity : ComponentActivity() {
 
+val viewModel = RetroViewModel()
+class MainActivity : ComponentActivity() {
+    lateinit var retroViewModel: RetroViewModel
     lateinit var mediaPlayer: MediaPlayer
+
+
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
 
@@ -95,6 +102,7 @@ class MainActivity : ComponentActivity() {
                 if (userId.isNullOrEmpty()) {
                     // If no userId, show the registration screen
                     setContent {
+                        retroViewModel = viewModel()
                         UserRegistrationScreen { username ->
                             registerUser(username)
                         }
@@ -103,6 +111,7 @@ class MainActivity : ComponentActivity() {
                     // If userId exists, proceed to the main content
                     // Replace this with your main screen composable
                     setContent {
+                        retroViewModel = viewModel()
 
                         MACCProjTheme {
                             val navController = rememberNavController()
@@ -110,7 +119,7 @@ class MainActivity : ComponentActivity() {
 
                             NavHost(navController, startDestination = "menu") {
                                 composable("menu") { MenuScreen(userId, navController, buttonMediaPlayer) }
-                                composable("highscore") { HighscoreScreen("Max", navController, buttonMediaPlayer) }
+                                composable("highscore") { HighscoreScreen("Max", navController, buttonMediaPlayer, retroViewModel) }
                                 composable("arscreen") { ARScreen(navController, buttonMediaPlayer) }
                                 /*composable("menu") { MenuScreen(navController, buttonMediaPlayer) }
                                 composable("highscore") { HighscoreScreen(navController, buttonMediaPlayer) }*/
@@ -294,14 +303,14 @@ fun MenuScreen(userId: String, navController: NavController, buttonMediaPlayer: 
 
 
 @Composable
-fun HighscoreScreen(name: String, navController: NavController, buttonMediaPlayer: MediaPlayer, modifier: Modifier = Modifier) {
+fun HighscoreScreen(name: String, navController: NavController, buttonMediaPlayer: MediaPlayer, retroViewModel: RetroViewModel, modifier: Modifier = Modifier) {
     val mContext = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var helloWorldText by remember { mutableStateOf("Loading...") }
 
+    retroViewModel.getTopScores()
 
-
-    LaunchedEffect(Unit) {
+    /*LaunchedEffect(Unit) {
         coroutineScope.launch {
             try {
                 val response = RetroAPI.retrofitService.helloWorld()
@@ -309,6 +318,19 @@ fun HighscoreScreen(name: String, navController: NavController, buttonMediaPlaye
             } catch (e: Exception) {
                 helloWorldText = "Error: ${e.message}"
             }
+        }
+    }*/
+
+    val state = retroViewModel.retroUiState
+    when (state) {
+        is RetroUiState.Loading -> {
+        }
+
+        is RetroUiState.Success -> {
+            helloWorldText = retroViewModel.retroUiState.toString()
+        }
+
+        is RetroUiState.Error -> {
         }
     }
 
