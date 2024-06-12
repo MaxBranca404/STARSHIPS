@@ -53,6 +53,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.maccproj.ui.theme.MACCProjTheme
+import com.google.ar.core.Config
 import com.google.gson.JsonObject
 import io.github.sceneview.ar.ARScene
 import io.github.sceneview.ar.rememberARCameraNode
@@ -61,6 +62,7 @@ import io.github.sceneview.rememberCollisionSystem
 import io.github.sceneview.rememberEngine
 import com.google.ar.core.Frame
 import com.google.ar.core.TrackingFailureReason
+import io.github.sceneview.node.ModelNode
 import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberNodes
 import io.github.sceneview.rememberView
@@ -69,9 +71,20 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import androidx.compose.runtime.LaunchedEffect as LaunchedEffect
-
+import com.google.ar.core.Anchor
+import dev.romainguy.kotlin.math.Float2
+import io.github.sceneview.animation.Transition.animateRotation
+import io.github.sceneview.ar.ARScene
+import io.github.sceneview.ar.arcore.createAnchorOrNull
+import io.github.sceneview.ar.arcore.isValid
+import io.github.sceneview.ar.node.AnchorNode
+import io.github.sceneview.rememberMaterialLoader
+import io.github.sceneview.rememberOnGestureListener
+import io.github.sceneview.rememberView
 
 val viewModel = RetroViewModel()
+val ship_path = "assets/ship.glb"
+
 class MainActivity : ComponentActivity() {
     lateinit var retroViewModel: RetroViewModel
     lateinit var mediaPlayer: MediaPlayer
@@ -361,7 +374,8 @@ fun ARScreen(navController: NavController, buttonMediaPlayer: MediaPlayer) {
     val laserMediaPlayer = MediaPlayer.create(mContext, R.raw.laser)
     val engine = rememberEngine()
     val modelLoader = rememberModelLoader(engine)
-    val model = modelLoader.createModel("model.glb")
+    //val model = modelLoader.createModel(ship_path)
+    val materialLoader = rememberMaterialLoader(engine)
     var frame by remember { mutableStateOf<Frame?>(null) }
     val childNodes = rememberNodes()
     val cameraNode = rememberARCameraNode(engine)
@@ -388,7 +402,7 @@ fun ARScreen(navController: NavController, buttonMediaPlayer: MediaPlayer) {
     */
 
     ARScene(
-        /*modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         childNodes = childNodes,
         engine = engine,
         view = view,
@@ -411,11 +425,11 @@ fun ARScreen(navController: NavController, buttonMediaPlayer: MediaPlayer) {
         },
         onSessionCreated = { session ->
 
-           var shipNode = ModelNode(
+          /* var shipNode = ModelNode(
                 modelInstance = modelInstancesShips.apply {
                     if (isEmpty()) {
                         //inserici il path del modello!!!!!!
-                        this += modelLoader.createInstancedModel(kModelFile_Rod, 2)
+                        this += modelLoader.createInstancedModel(ship_path, 2)
                             /*
                             .apply{
                             val randomX = random.nextFloat() * 2 - 1 // Random number between -1 and 1
@@ -433,10 +447,10 @@ fun ARScreen(navController: NavController, buttonMediaPlayer: MediaPlayer) {
             //anchornode.addChildNode(rodNode)
             childNodes += shipNode
 
-        },
+       */ },
         onSessionUpdated = { session, updatedFrame ->
             }
-    */
+
     )
 
     // Box for foreground (spaceship's cockpit)
