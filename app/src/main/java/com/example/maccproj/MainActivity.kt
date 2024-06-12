@@ -1,17 +1,14 @@
 package com.example.maccproj
 
+import android.content.Context
 import android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
 import android.media.MediaPlayer
 import android.os.Bundle
 import android.os.CountDownTimer
-import android.util.JsonReader
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.viewModels
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,7 +26,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -44,7 +40,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.paint
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -53,7 +48,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -61,40 +55,20 @@ import androidx.navigation.compose.rememberNavController
 import com.example.maccproj.ui.theme.MACCProjTheme
 import com.google.gson.JsonObject
 import io.github.sceneview.ar.ARScene
-import io.github.sceneview.animation.Transition.animateRotation
-import io.github.sceneview.ar.ARScene
-import io.github.sceneview.ar.arcore.createAnchorOrNull
-import io.github.sceneview.ar.arcore.isValid
-import io.github.sceneview.ar.node.AnchorNode
 import io.github.sceneview.ar.rememberARCameraNode
-import io.github.sceneview.loaders.MaterialLoader
-import io.github.sceneview.loaders.ModelLoader
-import io.github.sceneview.math.Rotation
 import io.github.sceneview.model.ModelInstance
-import io.github.sceneview.node.CubeNode
-import io.github.sceneview.node.ModelNode
 import io.github.sceneview.rememberCollisionSystem
 import io.github.sceneview.rememberEngine
-import io.github.sceneview.rememberMaterialLoader
-import com.google.android.filament.Engine
-import com.google.ar.core.Anchor
-import com.google.ar.core.Config
 import com.google.ar.core.Frame
 import com.google.ar.core.TrackingFailureReason
-import dev.romainguy.kotlin.math.pow
 import io.github.sceneview.rememberModelLoader
-import io.github.sceneview.rememberNode
 import io.github.sceneview.rememberNodes
-import io.github.sceneview.rememberOnGestureListener
 import io.github.sceneview.rememberView
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import retrofit2.Callback
-import retrofit2.Response
-import java.io.IOException
+import kotlinx.coroutines.runBlocking
 import androidx.compose.runtime.LaunchedEffect as LaunchedEffect
-import kotlin.random.Random
 
 
 val viewModel = RetroViewModel()
@@ -120,6 +94,7 @@ class MainActivity : ComponentActivity() {
         /*// Example usage to remove the user ID
         lifecycleScope.launch {
             UserPreferences.removeUserId(this@MainActivity)
+            UserPreferences.removeUserId(this@MainActivity)
         }*/
 
         // Check if userId is already saved
@@ -131,13 +106,20 @@ class MainActivity : ComponentActivity() {
                     setContent {
                         retroViewModel = viewModel()
                         UserRegistrationScreen { username ->
-                            registerUser(username)
+                            registerUser(username, retroViewModel)
                         }
                     }
                 } else {
                     // If userId exists, proceed to the main content
-                    // Replace this with your main screen composable
+                    var userName = ""
+                    runBlocking {
+                        val user: String? = UserPreferences.getUserId(applicationContext).first()
+                        userName = user.toString()
+                    }
+
                     setContent {
+
+
                         retroViewModel = viewModel()
 
                         MACCProjTheme {
@@ -146,7 +128,7 @@ class MainActivity : ComponentActivity() {
 
                             NavHost(navController, startDestination = "menu") {
                                 composable("menu") { MenuScreen(userId, navController, buttonMediaPlayer) }
-                                composable("highscore") { HighscoreScreen("Max", navController, buttonMediaPlayer, retroViewModel) }
+                                composable("highscore") { HighscoreScreen(userName, navController, buttonMediaPlayer, retroViewModel) }
                                 composable("arscreen") { ARScreen(navController, buttonMediaPlayer) }
                                 /*composable("menu") { MenuScreen(navController, buttonMediaPlayer) }
                                 composable("highscore") { HighscoreScreen(navController, buttonMediaPlayer) }*/
@@ -174,47 +156,33 @@ class MainActivity : ComponentActivity() {
         mediaPlayer.release()
     }
 
-    private fun registerUser(username: String) {
+    private fun registerUser(username: String, retroViewModel: RetroViewModel) {
         // Prepare the new user data
         val newUser = JsonObject().apply {
             addProperty("username", username)
         }
 
-        /*// Call the API method to insert the new user
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val response = RetroAPI.retrofitService.insertUser(newUser)
-                // Handle the response here
-                println("User added successfully: $response")
-            } catch (e: Exception) {
-                // Handle the error here
-                e.printStackTrace()
+        retroViewModel.insertUser(newUser)
+
+        val state = retroViewModel.retroUiState
+        when (state) {
+            is RetroUiState.Loading -> {
+            }
+
+            is RetroUiState.Success -> {
+                lifecycleScope.launch {
+                    UserPreferences.saveUserId(applicationContext, username)
+                    // Now that the username is saved, restart the activity to show the main content
+                    recreate()
+                }
+            }
+
+            is RetroUiState.Error -> {
             }
         }
 
-        recreate()*/
-
-        lifecycleScope.launch {
-            UserPreferences.saveUserId(applicationContext, username)
-            // Now that the userId is saved, restart the activity to show the main content
-            recreate()
-        }
     }
 }
-
-/*
-fun getUserId(username: String, onResult: (String?) -> Unit) {
-    CoroutineScope(Dispatchers.IO).launch {
-        try {
-            val response = RetroAPI.retrofitService.getUserId(username)
-            val userId = response.get("userid").asString
-            onResult(userId)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            onResult(null)
-        }
-    }
-}*/
 
 
 @Composable
@@ -318,7 +286,7 @@ fun MenuScreen(userId: String, navController: NavController, buttonMediaPlayer: 
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            Text("User logged in with userid: ${userId}",
+            Text("User logged in with username: ${userId}",
                 color = Color.Black,
                 fontWeight = FontWeight.Bold
             )
@@ -330,36 +298,13 @@ fun MenuScreen(userId: String, navController: NavController, buttonMediaPlayer: 
 
 
 @Composable
-fun HighscoreScreen(name: String, navController: NavController, buttonMediaPlayer: MediaPlayer, retroViewModel: RetroViewModel, modifier: Modifier = Modifier) {
+fun HighscoreScreen(username: String, navController: NavController, buttonMediaPlayer: MediaPlayer, retroViewModel: RetroViewModel, modifier: Modifier = Modifier) {
     val mContext = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    var helloWorldText by remember { mutableStateOf("Loading...") }
+    var userId by remember { mutableStateOf("Loading...") }
+    var maxScore by remember { mutableStateOf("Loading...") }
 
-    retroViewModel.getTopScores()
-
-    /*LaunchedEffect(Unit) {
-        coroutineScope.launch {
-            try {
-                val response = RetroAPI.retrofitService.getTopScores()
-                helloWorldText = response.toString()
-            } catch (e: Exception) {
-                helloWorldText = "Error: ${e.message}"
-            }
-        }
-    }*/
-
-    val state = retroViewModel.retroUiState
-    when (state) {
-        is RetroUiState.Loading -> {
-        }
-
-        is RetroUiState.Success -> {
-            helloWorldText = retroViewModel.retroUiState.toString()
-        }
-
-        is RetroUiState.Error -> {
-        }
-    }
+    maxScore = getUserMaxScore("Mario", retroViewModel)
 
 
     Surface(
@@ -368,14 +313,14 @@ fun HighscoreScreen(name: String, navController: NavController, buttonMediaPlaye
     ){
         Column {
             Text(
-                text = "Highscore of $name!",
+                text = "Highscore of $username!",
                 modifier = modifier
             )
-            Text(text = helloWorldText)
+            Text(text = "Your userid is: ${userId}!")
+            Text(text = "Your highscore is: ${maxScore}!")
         }
     }
 }
-
 
 
 @Composable
@@ -443,7 +388,7 @@ fun ARScreen(navController: NavController, buttonMediaPlayer: MediaPlayer) {
     */
 
     ARScene(
-        modifier = Modifier.fillMaxSize(),
+        /*modifier = Modifier.fillMaxSize(),
         childNodes = childNodes,
         engine = engine,
         view = view,
@@ -491,7 +436,7 @@ fun ARScreen(navController: NavController, buttonMediaPlayer: MediaPlayer) {
         },
         onSessionUpdated = { session, updatedFrame ->
             }
-
+    */
     )
 
     // Box for foreground (spaceship's cockpit)
@@ -626,6 +571,77 @@ fun ARScreen(navController: NavController, buttonMediaPlayer: MediaPlayer) {
         )
     }
 
+}
+
+
+
+
+
+fun extractUserId(input: String): String? {
+    val regex = """userid":(\d+)""".toRegex()
+    val matchResult = regex.find(input)
+    return matchResult?.groups?.get(1)?.value
+}
+
+fun getUserId(username: String, retroViewModel: RetroViewModel): String {
+    var userId = ""
+    retroViewModel.getUserId(username)
+
+    val state = retroViewModel.retroUiState
+    when (state) {
+        is RetroUiState.Loading -> {
+        }
+
+        is RetroUiState.Success -> {
+            val data = retroViewModel.retroUiState.toString()
+            userId = extractUserId(data).toString()
+        }
+
+        is RetroUiState.Error -> {
+        }
+    }
+    return userId
+}
+
+fun getUserMaxScore(username: String, retroViewModel: RetroViewModel): String {
+    var userMaxScore = ""
+    retroViewModel.getUserMaxScore(username)
+
+    val state = retroViewModel.retroUiState
+    when (state) {
+        is RetroUiState.Loading -> {
+        }
+
+        is RetroUiState.Success -> {
+            val data = retroViewModel.retroUiState.toString()
+            userMaxScore = data
+        }
+
+        is RetroUiState.Error -> {
+        }
+    }
+    return userMaxScore
+}
+
+fun insertUserMaxScore(name: Int, score: Int, retroViewModel: RetroViewModel) {
+    val newScore = JsonObject().apply {
+        addProperty("name", name)
+        addProperty("score", score)
+    }
+
+    retroViewModel.insertUserMaxScore(newScore)
+
+    val state = retroViewModel.retroUiState
+    when (state) {
+        is RetroUiState.Loading -> {
+        }
+
+        is RetroUiState.Success -> {
+        }
+
+        is RetroUiState.Error -> {
+        }
+    }
 }
 
 

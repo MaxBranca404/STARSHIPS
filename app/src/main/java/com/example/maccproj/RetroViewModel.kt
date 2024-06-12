@@ -28,7 +28,20 @@ class RetroViewModel : ViewModel() {
         private set
 
     init {
-        getTopScores()
+        //getTopScores()
+    }
+
+    fun insertUser(data :JsonObject) {
+        viewModelScope.launch {
+            retroUiState = try {
+                val jsonResult = RetroAPI.retrofitService.insertUser(data)
+                RetroUiState.Success(jsonResult)
+            }catch (e: IOException){
+                Log.println(Log.INFO,"ERR",e.message.toString())
+                RetroUiState.Error
+            }
+
+        }
     }
 
     fun getUserId(username :String) {
@@ -38,6 +51,19 @@ class RetroViewModel : ViewModel() {
                 RetroUiState.Success(jsonResult)
             }catch (e: IOException){
 
+                Log.println(Log.INFO,"ERR",e.message.toString())
+                RetroUiState.Error
+            }
+
+        }
+    }
+
+    fun insertUserMaxScore(data :JsonObject) {
+        viewModelScope.launch {
+            retroUiState = try {
+                val jsonResult = RetroAPI.retrofitService.insertScore(data)
+                RetroUiState.Success(jsonResult)
+            }catch (e: IOException){
                 Log.println(Log.INFO,"ERR",e.message.toString())
                 RetroUiState.Error
             }
@@ -59,6 +85,11 @@ class RetroViewModel : ViewModel() {
         }
     }
 
+    fun resetUiState() {
+        retroUiState = RetroUiState.Loading
+    }
+
+    /*
     fun getTopScores() {
         viewModelScope.launch {
             retroUiState = try {
@@ -98,7 +129,7 @@ class RetroViewModel : ViewModel() {
                 retroUiState = RetroUiState.Error
             }
         })
-    }
+    }*/
 
     // Add other methods as needed
 }
