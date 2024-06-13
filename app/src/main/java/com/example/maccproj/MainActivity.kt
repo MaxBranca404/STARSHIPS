@@ -167,17 +167,16 @@ class MainActivity : ComponentActivity() {
 
             is RetroState.Success -> {
                 Log.println(Log.INFO,"ADD","AddUser: tutto ok!")
-
-                lifecycleScope.launch {
-                    UserPreferences.saveUsername(applicationContext, username)
-                    // Now that the username is saved, restart the activity to show the main content
-                    delay(2000)
-                    recreate()
-                }
             }
 
             is RetroState.Error -> {
             }
+        }
+        lifecycleScope.launch {
+            UserPreferences.saveUsername(applicationContext, username)
+            // Now that the username is saved, restart the activity to show the main content
+            delay(2000)
+            recreate()
         }
     }
 }
