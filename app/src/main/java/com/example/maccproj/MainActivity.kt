@@ -411,12 +411,12 @@ fun HighscoreScreen(
                         // Display score entries with position
                         itemsIndexed(sortedListScore) { index, entry ->
                             val backgroundColor = when (index) {
-                                0 -> Color(0xFFFFD700)  // Gold
-                                1 -> Color(0xFFC0C0C0)  // Silver
-                                2 -> Color(0xFFCD7F32)  // Bronze
+                                0 -> Color(0xFFFFD700).copy(alpha = 0.5f)  // Gold
+                                1 -> Color(0xFFC0C0C0).copy(alpha = 0.5f)  // Silver
+                                2 -> Color(0xFFCD7F32).copy(alpha = 0.5f)  // Bronze
                                 else -> Color.Transparent
                             }
-                            val textColor = if (index in 0..2) Color.Black else Color.White
+                            val textWeight = if (index in 0..2) FontWeight.Bold else FontWeight.Normal
 
                             Row(
                                 modifier = Modifier
@@ -425,10 +425,10 @@ fun HighscoreScreen(
                                     .padding(100.dp,15.dp,15.dp,15.dp),
                                 horizontalArrangement = Arrangement.SpaceEvenly
                             ) {
-                                Text(text = (index + 1).toString(), modifier = Modifier.weight(1f), color = textColor)
-                                Text(text = entry.username, modifier = Modifier.weight(1f), color = textColor)
-                                Text(text = entry.score.toString(), modifier = Modifier.weight(1f), color = textColor)
-                                Text(text = entry.date, modifier = Modifier.weight(1f), color = textColor)
+                                Text(text = (index + 1).toString(), modifier = Modifier.weight(1f), color = Color.White, fontWeight = textWeight)
+                                Text(text = entry.username, modifier = Modifier.weight(1f), color = Color.White, fontWeight = textWeight)
+                                Text(text = entry.score.toString(), modifier = Modifier.weight(1f), color = Color.White, fontWeight = textWeight)
+                                Text(text = entry.date, modifier = Modifier.weight(1f), color = Color.White, fontWeight = textWeight)
                             }
                         }
 
