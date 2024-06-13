@@ -5,6 +5,7 @@ import android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
 import android.media.MediaPlayer
 import android.os.Bundle
 import android.os.CountDownTimer
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.BorderStroke
@@ -68,6 +69,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
 import androidx.compose.runtime.LaunchedEffect as LaunchedEffect
 
 
@@ -91,17 +93,17 @@ class MainActivity : ComponentActivity() {
         mediaPlayer.start()
 
 
+
         /*// Example usage to remove the user ID
         lifecycleScope.launch {
-            UserPreferences.removeUserId(this@MainActivity)
-            UserPreferences.removeUserId(this@MainActivity)
+            UserPreferences.removeUsername(this@MainActivity)
         }*/
 
         // Check if userId is already saved
         lifecycleScope.launch {
-            val userIdFlow = UserPreferences.getUserId(applicationContext)
-            userIdFlow.collect { userId ->
-                if (userId.isNullOrEmpty()) {
+            val userNameFlow = UserPreferences.getUsername(applicationContext)
+            userNameFlow.collect { userName ->
+                if (userName.isNullOrEmpty()) {
                     // If no userId, show the registration screen
                     setContent {
                         retroViewModel = viewModel()
@@ -110,15 +112,9 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 } else {
-                    // If userId exists, proceed to the main content
-                    var userName = ""
-                    runBlocking {
-                        val user: String? = UserPreferences.getUserId(applicationContext).first()
-                        userName = user.toString()
-                    }
+                    // If username exists, proceed to the main content
 
                     setContent {
-
 
                         retroViewModel = viewModel()
 
@@ -127,9 +123,9 @@ class MainActivity : ComponentActivity() {
                             val buttonMediaPlayer = MediaPlayer.create(LocalContext.current,R.raw.buttoncut) //imposta audio click tasti menu
 
                             NavHost(navController, startDestination = "menu") {
-                                composable("menu") { MenuScreen(userId, navController, buttonMediaPlayer) }
+                                composable("menu") { MenuScreen(userName, navController, buttonMediaPlayer) }
                                 composable("highscore") { HighscoreScreen(userName, navController, buttonMediaPlayer, retroViewModel) }
-                                composable("arscreen") { ARScreen(navController, buttonMediaPlayer) }
+                                composable("arscreen") { ARScreen(userName, navController, buttonMediaPlayer, retroViewModel) }
                                 /*composable("menu") { MenuScreen(navController, buttonMediaPlayer) }
                                 composable("highscore") { HighscoreScreen(navController, buttonMediaPlayer) }*/
                             }
@@ -162,25 +158,27 @@ class MainActivity : ComponentActivity() {
             addProperty("username", username)
         }
 
-        retroViewModel.insertUser(newUser)
+        retroViewModel.addUser(newUser)
 
-        val state = retroViewModel.retroUiState
+        val state = retroViewModel.retroAddState
         when (state) {
-            is RetroUiState.Loading -> {
+            is RetroState.Loading -> {
             }
 
-            is RetroUiState.Success -> {
+            is RetroState.Success -> {
+                Log.println(Log.INFO,"ADD","AddUser: tutto ok!")
+
                 lifecycleScope.launch {
-                    UserPreferences.saveUserId(applicationContext, username)
+                    UserPreferences.saveUsername(applicationContext, username)
                     // Now that the username is saved, restart the activity to show the main content
+                    delay(2000)
                     recreate()
                 }
             }
 
-            is RetroUiState.Error -> {
+            is RetroState.Error -> {
             }
         }
-
     }
 }
 
@@ -235,7 +233,7 @@ fun UserRegistrationScreen(onEnterClick: (String) -> Unit) {
 
 
 @Composable
-fun MenuScreen(userId: String, navController: NavController, buttonMediaPlayer: MediaPlayer){
+fun MenuScreen(userName: String, navController: NavController, buttonMediaPlayer: MediaPlayer){
 
     Box(modifier = Modifier
         .background(Color(45, 67, 208))
@@ -286,7 +284,7 @@ fun MenuScreen(userId: String, navController: NavController, buttonMediaPlayer: 
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            Text("User logged in with username: ${userId}",
+            Text("User logged in with username: ${userName}",
                 color = Color.Black,
                 fontWeight = FontWeight.Bold
             )
@@ -298,14 +296,14 @@ fun MenuScreen(userId: String, navController: NavController, buttonMediaPlayer: 
 
 
 @Composable
-fun HighscoreScreen(username: String, navController: NavController, buttonMediaPlayer: MediaPlayer, retroViewModel: RetroViewModel, modifier: Modifier = Modifier) {
+fun HighscoreScreen(userName: String, navController: NavController, buttonMediaPlayer: MediaPlayer, retroViewModel: RetroViewModel, modifier: Modifier = Modifier) {
     val mContext = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    var userId by remember { mutableStateOf("Loading...") }
-    var maxScore by remember { mutableStateOf("Loading...") }
+    //var userId by remember { mutableStateOf("Loading...") }
+    var score by remember { mutableStateOf("Loading...") }
+    var ID by remember { mutableStateOf(0) }
 
-    maxScore = getUserMaxScore("Mario", retroViewModel)
-
+    score = getScore(userName, retroViewModel)
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -313,18 +311,17 @@ fun HighscoreScreen(username: String, navController: NavController, buttonMediaP
     ){
         Column {
             Text(
-                text = "Highscore of $username!",
+                text = "Welcome $userName!",
                 modifier = modifier
             )
-            Text(text = "Your userid is: ${userId}!")
-            Text(text = "Your highscore is: ${maxScore}!")
+            Text(text = "Your highscore is: ${score}!")
         }
     }
 }
 
 
 @Composable
-fun ARScreen(navController: NavController, buttonMediaPlayer: MediaPlayer) {
+fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: MediaPlayer, retroViewModel: RetroViewModel) {
 
     var playerscore by remember { mutableStateOf(0) }
 
@@ -359,7 +356,8 @@ fun ARScreen(navController: NavController, buttonMediaPlayer: MediaPlayer) {
 
     val mContext = LocalContext.current
     val laserMediaPlayer = MediaPlayer.create(mContext, R.raw.laser)
-    val engine = rememberEngine()
+
+    /*val engine = rememberEngine()
     val modelLoader = rememberModelLoader(engine)
     val model = modelLoader.createModel("model.glb")
     var frame by remember { mutableStateOf<Frame?>(null) }
@@ -373,7 +371,6 @@ fun ARScreen(navController: NavController, buttonMediaPlayer: MediaPlayer) {
     var trackingFailureReason by remember {
         mutableStateOf<TrackingFailureReason?>(null)
     }
-    /*
     var sensorManager: SensorManager? = null
     var accelerometer: Sensor? = null
     var gyroscope: Sensor? = null
@@ -385,10 +382,10 @@ fun ARScreen(navController: NavController, buttonMediaPlayer: MediaPlayer) {
 
     accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     gyroscope = sensorManager?.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
-    */
+
 
     ARScene(
-        /*modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         childNodes = childNodes,
         engine = engine,
         view = view,
@@ -436,8 +433,8 @@ fun ARScreen(navController: NavController, buttonMediaPlayer: MediaPlayer) {
         },
         onSessionUpdated = { session, updatedFrame ->
             }
-    */
-    )
+
+    )*/
 
     // Box for foreground (spaceship's cockpit)
     Box(
@@ -540,6 +537,14 @@ fun ARScreen(navController: NavController, buttonMediaPlayer: MediaPlayer) {
 
     // Open the popup menu when the countdown ends
     if (showPopup) {
+        val maxScore = getScore(userName, retroViewModel)
+        if(playerscore>maxScore.toInt()){
+            Log.println(Log.INFO,"NEWSCORE","NewScore>OldScore: caricamento in corso!")
+            updateScore(userName,playerscore,retroViewModel)
+        }else{
+            Log.println(Log.INFO,"OLDSCORE","NewScore<OldScore: mantengo punteggio precedente!")
+        }
+        //updateScore(userName,playerscore,retroViewModel)
         AlertDialog(
             onDismissRequest = { showPopup = false },
             title = { Text(text = "Game Over", fontWeight = FontWeight.Bold, fontSize = 24.sp) },
@@ -550,20 +555,20 @@ fun ARScreen(navController: NavController, buttonMediaPlayer: MediaPlayer) {
             },
             confirmButton = {
                 ElevatedButton(onClick = {
-                        showPopup = false
-                        navController.navigate("arscreen") { // Replace "current_screen" with your current screen route
-                            popUpTo("arscreen") { inclusive = true }
-                        }
+                    showPopup = false
+                    navController.navigate("arscreen") { // Replace "current_screen" with your current screen route
+                        popUpTo("arscreen") { inclusive = true }
                     }
+                }
                 ) {
                     Text("Restart Game")
                 }
             },
             dismissButton = {
                 ElevatedButton(onClick = {
-                        showPopup = false
-                        navController.navigate("menu") // Replace "menu" with your menu screen route
-                    }
+                    showPopup = false
+                    navController.navigate("menu") // Replace "menu" with your menu screen route
+                }
                 ) {
                     Text("Go to Menu")
                 }
@@ -576,60 +581,64 @@ fun ARScreen(navController: NavController, buttonMediaPlayer: MediaPlayer) {
 
 
 
-
+/*
 fun extractUserId(input: String): String? {
     val regex = """userid":(\d+)""".toRegex()
     val matchResult = regex.find(input)
     return matchResult?.groups?.get(1)?.value
-}
+}*/
 
-fun getUserId(username: String, retroViewModel: RetroViewModel): String {
-    var userId = ""
-    retroViewModel.getUserId(username)
-
-    val state = retroViewModel.retroUiState
-    when (state) {
-        is RetroUiState.Loading -> {
-        }
-
-        is RetroUiState.Success -> {
-            val data = retroViewModel.retroUiState.toString()
-            userId = extractUserId(data).toString()
-        }
-
-        is RetroUiState.Error -> {
-        }
-    }
-    return userId
-}
-
-fun getUserMaxScore(username: String, retroViewModel: RetroViewModel): String {
+fun getScore(username: String, retroViewModel: RetroViewModel): String {
     var userMaxScore = ""
-    retroViewModel.getUserMaxScore(username)
+    retroViewModel.getScore(username)
 
-    val state = retroViewModel.retroUiState
+    val state = retroViewModel.retroScoreState
     when (state) {
-        is RetroUiState.Loading -> {
+        is RetroState.Loading -> {
         }
 
-        is RetroUiState.Success -> {
-            val data = retroViewModel.retroUiState.toString()
-            userMaxScore = data
+        is RetroState.Success -> {
+            Log.println(Log.INFO,"GET","GetScore: tutto ok!")
+            val data = state.data.get("score")
+            userMaxScore = data.toString()
         }
 
-        is RetroUiState.Error -> {
+        is RetroState.Error -> {
         }
     }
     return userMaxScore
 }
 
-fun insertUserMaxScore(name: Int, score: Int, retroViewModel: RetroViewModel) {
+fun updateScore(username: String, score: Int, retroViewModel: RetroViewModel) {
     val newScore = JsonObject().apply {
-        addProperty("name", name)
+        addProperty("username", username)
         addProperty("score", score)
     }
 
-    retroViewModel.insertUserMaxScore(newScore)
+    retroViewModel.updateScore(newScore)
+
+    val state = retroViewModel.retroUpdState
+    when (state) {
+        is RetroState.Loading -> {
+        }
+
+        is RetroState.Success -> {
+            Log.println(Log.INFO,"UPD","UpdateScore: tutto ok!")
+        }
+
+        is RetroState.Error -> {
+        }
+    }
+}
+
+/*
+fun updateUserMaxScore(name: Int, score: Int, retroViewModel: RetroViewModel) {
+    val newScore = JsonObject().apply {
+        addProperty("username", name)
+        addProperty("maxscore", score)
+    }
+
+    retroViewModel.updateUserMaxScore(newScore)
 
     val state = retroViewModel.retroUiState
     when (state) {
@@ -642,8 +651,9 @@ fun insertUserMaxScore(name: Int, score: Int, retroViewModel: RetroViewModel) {
         is RetroUiState.Error -> {
         }
     }
-}
 
+
+}*/
 
 
 

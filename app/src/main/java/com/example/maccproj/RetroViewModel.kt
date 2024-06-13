@@ -13,123 +13,80 @@ import retrofit2.Callback
 import retrofit2.Response
 import java.io.IOException
 
-sealed interface RetroUiState {
-    data class Success(val data: JsonObject) : RetroUiState
-    object Error : RetroUiState
-    object Loading : RetroUiState
+sealed interface RetroState {
+    data class Success(val data: JsonObject) : RetroState
+    object Error : RetroState
+    object Loading : RetroState
 }
 
 class RetroViewModel : ViewModel() {
+    //stato scrittura id
+    var retroAddState: RetroState by mutableStateOf(RetroState.Loading)
+        public set
 
-    var retroUiState: RetroUiState by mutableStateOf(RetroUiState.Loading)
-        private set
+    //stato aggiornamento score
+    var retroUpdState: RetroState by mutableStateOf(RetroState.Loading)
+        public set
 
-    var retroGridState: RetroUiState by mutableStateOf(RetroUiState.Loading)
-        private set
+    //stato lettura singolo score
+    var retroScoreState: RetroState by mutableStateOf(RetroState.Loading)
+        public set
 
-    init {
-        //getTopScores()
-    }
+    //stato lettura all score
+    var retroAllScoreState: RetroState by mutableStateOf(RetroState.Loading)
+        public set
 
-    fun insertUser(data :JsonObject) {
+
+    fun addUser(data :JsonObject) {
         viewModelScope.launch {
-            retroUiState = try {
-                val jsonResult = RetroAPI.retrofitService.insertUser(data)
-                RetroUiState.Success(jsonResult)
+            retroAddState = try {
+                val jsonResult = RetroAPI.retrofitService.addUser(data)
+                RetroState.Success(jsonResult)
             }catch (e: IOException){
                 Log.println(Log.INFO,"ERR",e.message.toString())
-                RetroUiState.Error
+                RetroState.Error
             }
 
         }
     }
 
-    fun getUserId(username :String) {
-        viewModelScope.launch {
-            retroUiState = try {
-                val jsonResult = RetroAPI.retrofitService.getUserId(username)
-                RetroUiState.Success(jsonResult)
-            }catch (e: IOException){
 
+    fun updateScore(data :JsonObject) {
+        viewModelScope.launch {
+            retroUpdState = try {
+                val jsonResult = RetroAPI.retrofitService.updateScore(data)
+                RetroState.Success(jsonResult)
+            }catch (e: IOException){
                 Log.println(Log.INFO,"ERR",e.message.toString())
-                RetroUiState.Error
+                RetroState.Error
             }
 
         }
     }
 
-    fun insertUserMaxScore(data :JsonObject) {
+    fun getScore(username :String) {
         viewModelScope.launch {
-            retroUiState = try {
-                val jsonResult = RetroAPI.retrofitService.insertScore(data)
-                RetroUiState.Success(jsonResult)
+            retroScoreState = try {
+                val jsonResult = RetroAPI.retrofitService.getScore(username)
+                RetroState.Success(jsonResult)
             }catch (e: IOException){
                 Log.println(Log.INFO,"ERR",e.message.toString())
-                RetroUiState.Error
+                RetroState.Error
             }
 
         }
     }
 
-    fun getUserMaxScore(username :String) {
+    fun getAllScore() {
         viewModelScope.launch {
-            retroUiState = try {
-                val jsonResult = RetroAPI.retrofitService.getMaxScore(username)
-                RetroUiState.Success(jsonResult)
+            retroAllScoreState = try {
+                val jsonResult = RetroAPI.retrofitService.getAllScore()
+                RetroState.Success(jsonResult[0]) //test con primo valore della lista
             }catch (e: IOException){
-
                 Log.println(Log.INFO,"ERR",e.message.toString())
-                RetroUiState.Error
+                RetroState.Error
             }
 
         }
     }
-
-    fun resetUiState() {
-        retroUiState = RetroUiState.Loading
-    }
-
-    /*
-    fun getTopScores() {
-        viewModelScope.launch {
-            retroUiState = try {
-                val jsonResult = RetroAPI.retrofitService.getTopScores()
-                RetroUiState.Success(jsonResult)
-            }catch (e: IOException){
-
-                Log.println(Log.INFO,"ERR",e.message.toString())
-                RetroUiState.Error
-            }
-
-        }
-    }
-
-    fun fetchTopScores() {
-        retroUiState = RetroUiState.Loading
-        RetroAPI.retrofitService.getTopScores().enqueue(object : Callback<List<JsonObject>> {
-            override fun onResponse(
-                call: Call<List<JsonObject>>,
-                response: Response<List<JsonObject>>
-            ) {
-                if (response.isSuccessful) {
-                    val jsonArray = JsonArray().apply {
-                        response.body()?.forEach { add(it) }
-                    }
-                    val result = JsonObject().apply {
-                        add("topScores", jsonArray)
-                    }
-                    retroUiState = RetroUiState.Success(result)
-                } else {
-                    retroUiState = RetroUiState.Error
-                }
-            }
-
-            override fun onFailure(call: Call<List<JsonObject>>, t: Throwable) {
-                Log.println(Log.INFO, "ERR", t.message.toString())
-                retroUiState = RetroUiState.Error
-            }
-        })
-    }*/
-
-    // Add other methods as needed
 }
