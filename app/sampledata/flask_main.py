@@ -20,8 +20,13 @@ db = mysql.connector.connect(
 
 cursor = db.cursor()
 
+def check_db_connection():
+    if not db.is_connected():
+        db.reconnect()
+
 @app.route('/add_user', methods=['POST'])
 def add_user():
+    check_db_connection()
     data = request.get_json()
     username = data['username']
 
@@ -35,6 +40,7 @@ def add_user():
 
 @app.route('/update_score', methods=['PUT'])
 def update_score():
+    check_db_connection()
     data = request.get_json()
     username = data['username']
     score = data['score']
@@ -49,6 +55,7 @@ def update_score():
 
 @app.route('/get_score', methods=['GET'])
 def get_score():
+    check_db_connection()
     username = request.args.get('username')
 
     sql = "SELECT score, date_of_score FROM scores WHERE username = %s"
@@ -65,6 +72,7 @@ def get_score():
 
 @app.route('/get_all_score', methods=['GET'])
 def get_all_score():
+    check_db_connection()
 
     sql = "SELECT * FROM scores"
 
