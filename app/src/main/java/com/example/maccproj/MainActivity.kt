@@ -22,9 +22,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Divider
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -70,7 +74,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
+import java.util.Date
 import androidx.compose.runtime.LaunchedEffect as LaunchedEffect
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 
 val viewModel = RetroViewModel()
@@ -170,6 +177,7 @@ class MainActivity : ComponentActivity() {
             }
 
             is RetroState.Error -> {
+
             }
         }
         lifecycleScope.launch {
@@ -263,7 +271,7 @@ fun MenuScreen(userName: String, navController: NavController, buttonMediaPlayer
                     colors = ButtonDefaults.buttonColors(containerColor = Color(31, 111, 139, 255)),
                     border = BorderStroke(2.dp, Color(22, 89, 112, 120)),
                 ) {
-                    Text("START",fontWeight = FontWeight.Bold)
+                    Text("START",fontWeight = FontWeight.Bold, color = Color.White)
                 }
 
                 Spacer(modifier = Modifier.width(30.dp))
@@ -276,7 +284,7 @@ fun MenuScreen(userName: String, navController: NavController, buttonMediaPlayer
                     colors = ButtonDefaults.buttonColors(containerColor = Color(31, 111, 139, 255)),
                     border = BorderStroke(2.dp, Color(22, 89, 112, 120))
                 ) {
-                    Text("HIGHSCORE",fontWeight = FontWeight.Bold)
+                    Text("HIGHSCORE",fontWeight = FontWeight.Bold, color = Color.White)
                 }
 
             }
@@ -293,14 +301,175 @@ fun MenuScreen(userName: String, navController: NavController, buttonMediaPlayer
 
 }
 
+data class ScoreEntry(val username: String, val score: Int, val date: String)
 
+@Composable
+fun HighscoreScreen(
+    userName: String,
+    navController: NavController,
+    buttonMediaPlayer: MediaPlayer,
+    retroViewModel: RetroViewModel,
+    modifier: Modifier = Modifier
+) {
+    val mContext = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var score by remember { mutableStateOf("Loading...") }
+    val listScore = mutableListOf<ScoreEntry>()
+
+    // Fetch and parse all scores
+    val allScoreJson = getAllScore(retroViewModel)
+    allScoreJson.forEach { scoreJson ->
+        listScore.add(
+            ScoreEntry(
+                username = scoreJson.get("username").asString,
+                score = scoreJson.get("maxscore").asInt,
+                date = formatDate(scoreJson.get("date").asString)
+            )
+        )
+    }
+
+    // Sort listScore by score in descending order
+    val sortedListScore = listScore.sortedByDescending { it.score }.take(10)  // Limit to top 10
+
+    // Fetch user score
+    score = getScore(userName, retroViewModel)
+
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Color.Transparent
+    ) {
+        // Background and overlay
+        Box(modifier = Modifier
+            .fillMaxSize()
+            .paint(
+                painter = painterResource(id = R.drawable.scoreback),
+                contentScale = ContentScale.FillBounds
+            )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f))
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    // Fixed header
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "TOP 10",
+                            modifier = Modifier,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 35.sp
+                        )
+                        Text(
+                            text = "Welcome $userName!",
+                            modifier = Modifier,
+                            color = Color.White,
+                            fontSize = 20.sp
+                        )
+                        Text(
+                            text = "Your highscore is: $score!",
+                            modifier = Modifier,
+                            color = Color.White,
+                            fontSize = 20.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
+                    // Scrollable content
+                    LazyColumn(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) {
+                        item {
+
+
+                            // Display table header
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(100.dp,15.dp,15.dp,15.dp),
+                                horizontalArrangement = Arrangement.SpaceEvenly
+                            ) {
+                                Text(text = "Position", modifier = Modifier.weight(1f), color = Color.White)
+                                Text(text = "Username", modifier = Modifier.weight(1f), color = Color.White)
+                                Text(text = "Score", modifier = Modifier.weight(1f), color = Color.White)
+                                Text(text = "Date", modifier = Modifier.weight(1f), color = Color.White)
+                            }
+                        }
+
+                        // Display score entries with position
+                        itemsIndexed(sortedListScore) { index, entry ->
+                            val backgroundColor = when (index) {
+                                0 -> Color(0xFFFFD700)  // Gold
+                                1 -> Color(0xFFC0C0C0)  // Silver
+                                2 -> Color(0xFFCD7F32)  // Bronze
+                                else -> Color.Transparent
+                            }
+                            val textColor = if (index in 0..2) Color.Black else Color.White
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(backgroundColor)
+                                    .padding(100.dp,15.dp,15.dp,15.dp),
+                                horizontalArrangement = Arrangement.SpaceEvenly
+                            ) {
+                                Text(text = (index + 1).toString(), modifier = Modifier.weight(1f), color = textColor)
+                                Text(text = entry.username, modifier = Modifier.weight(1f), color = textColor)
+                                Text(text = entry.score.toString(), modifier = Modifier.weight(1f), color = textColor)
+                                Text(text = entry.date, modifier = Modifier.weight(1f), color = textColor)
+                            }
+                        }
+
+                        item {
+                            Text(text = "----------------", color = Color.White)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+
+
+fun formatDate(inputDate: String): String {
+    // Define the input and output date formats
+    val inputFormat = SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z", Locale.ENGLISH)
+    val outputFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ENGLISH)
+
+    // Parse the input date string to a Date object
+    val date = inputFormat.parse(inputDate)
+
+    // Format the Date object to the desired output format
+    return outputFormat.format(date)
+}
+
+/*
 @Composable
 fun HighscoreScreen(userName: String, navController: NavController, buttonMediaPlayer: MediaPlayer, retroViewModel: RetroViewModel, modifier: Modifier = Modifier) {
     val mContext = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     //var userId by remember { mutableStateOf("Loading...") }
     var score by remember { mutableStateOf("Loading...") }
-    var ID by remember { mutableStateOf(0) }
+    var allScoreJson = getAllScore(retroViewModel)
+    var allScoreString = ""
+
+    for(scoreJson in allScoreJson){
+        allScoreString += scoreJson.toString()
+    }
 
     score = getScore(userName, retroViewModel)
 
@@ -314,9 +483,10 @@ fun HighscoreScreen(userName: String, navController: NavController, buttonMediaP
                 modifier = modifier
             )
             Text(text = "Your highscore is: ${score}!")
+            Text(text = allScoreString)
         }
     }
-}
+}*/
 
 
 @Composable
@@ -606,6 +776,12 @@ fun getScore(username: String, retroViewModel: RetroViewModel): String {
         }
     }
     return userMaxScore
+}
+
+fun getAllScore(retroViewModel: RetroViewModel): List<JsonObject> {
+    retroViewModel.getAllScore()
+    Log.println(Log.INFO,"GETALL","GetAllScore: tutto ok!")
+    return retroViewModel.retroAllScoreState
 }
 
 fun updateScore(username: String, score: Int, retroViewModel: RetroViewModel) {

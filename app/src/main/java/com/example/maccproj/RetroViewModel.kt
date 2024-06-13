@@ -33,7 +33,7 @@ class RetroViewModel : ViewModel() {
         public set
 
     //stato lettura all score
-    var retroAllScoreState: RetroState by mutableStateOf(RetroState.Loading)
+    var retroAllScoreState = listOf<JsonObject>()
         public set
 
 
@@ -80,11 +80,10 @@ class RetroViewModel : ViewModel() {
     fun getAllScore() {
         viewModelScope.launch {
             retroAllScoreState = try {
-                val jsonResult = RetroAPI.retrofitService.getAllScore()
-                RetroState.Success(jsonResult[0]) //test con primo valore della lista
+                RetroAPI.retrofitService.getAllScore()
             }catch (e: IOException){
                 Log.println(Log.INFO,"ERR",e.message.toString())
-                RetroState.Error
+                listOf<JsonObject>()
             }
 
         }
