@@ -444,7 +444,6 @@ fun HighscoreScreen(
 
 
 
-
 fun formatDate(inputDate: String): String {
     // Define the input and output date formats
     val inputFormat = SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z", Locale.ENGLISH)
