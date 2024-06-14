@@ -2,6 +2,8 @@ package com.example.maccproj
 
 import android.content.Context
 import android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+import android.hardware.Sensor
+import android.hardware.SensorManager
 import android.media.MediaPlayer
 import android.os.Bundle
 import android.os.CountDownTimer
@@ -66,6 +68,8 @@ import io.github.sceneview.rememberCollisionSystem
 import io.github.sceneview.rememberEngine
 import com.google.ar.core.Frame
 import com.google.ar.core.TrackingFailureReason
+import io.github.sceneview.node.ModelNode
+import io.github.sceneview.rememberMaterialLoader
 import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberNodes
 import io.github.sceneview.rememberView
@@ -78,9 +82,11 @@ import java.util.Date
 import androidx.compose.runtime.LaunchedEffect as LaunchedEffect
 import java.text.SimpleDateFormat
 import java.util.Locale
+import com.google.ar.core.Config
 
 
 val viewModel = RetroViewModel()
+var ship_path = "assets/ship.glb"
 class MainActivity : ComponentActivity() {
     lateinit var retroViewModel: RetroViewModel
     lateinit var mediaPlayer: MediaPlayer
@@ -526,9 +532,10 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
     val mContext = LocalContext.current
     val laserMediaPlayer = MediaPlayer.create(mContext, R.raw.laser)
 
-    /*val engine = rememberEngine()
+    val engine = rememberEngine()
     val modelLoader = rememberModelLoader(engine)
-    val model = modelLoader.createModel("model.glb")
+    val materialLoader = rememberMaterialLoader(engine)
+    //val model = modelLoader.createModel("model.glb")
     var frame by remember { mutableStateOf<Frame?>(null) }
     val childNodes = rememberNodes()
     val cameraNode = rememberARCameraNode(engine)
@@ -540,6 +547,7 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
     var trackingFailureReason by remember {
         mutableStateOf<TrackingFailureReason?>(null)
     }
+
     var sensorManager: SensorManager? = null
     var accelerometer: Sensor? = null
     var gyroscope: Sensor? = null
@@ -551,6 +559,8 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
 
     accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     gyroscope = sensorManager?.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+
+
 
 
     ARScene(
@@ -581,7 +591,7 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
                 modelInstance = modelInstancesShips.apply {
                     if (isEmpty()) {
                         //inserici il path del modello!!!!!!
-                        this += modelLoader.createInstancedModel(kModelFile_Rod, 2)
+                        this += modelLoader.createInstancedModel(ship_path, 1)
                             /*
                             .apply{
                             val randomX = random.nextFloat() * 2 - 1 // Random number between -1 and 1
@@ -601,9 +611,12 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
 
         },
         onSessionUpdated = { session, updatedFrame ->
+
+            frame = updatedFrame
+
             }
 
-    )*/
+    )
 
     // Box for foreground (spaceship's cockpit)
     Box(
@@ -707,7 +720,11 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
     // Open the popup menu when the countdown ends
     if (showPopup) {
         val maxScore = getScore(userName, retroViewModel)
-        if(playerscore>maxScore.toInt()){
+        var maxScoreInt = 0
+        if (!maxScore.equals("")) {
+            maxScoreInt = maxScore.toInt()
+        }
+        if(playerscore>maxScoreInt){
             Log.println(Log.INFO,"NEWSCORE","NewScore>OldScore: caricamento in corso!")
             updateScore(userName,playerscore,retroViewModel)
         }else{
