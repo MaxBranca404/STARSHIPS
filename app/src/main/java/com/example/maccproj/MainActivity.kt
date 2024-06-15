@@ -2,9 +2,11 @@ package com.example.maccproj
 
 import android.content.Context
 import android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+import android.graphics.Point
+import android.hardware.Sensor
+import android.hardware.SensorManager
 import android.media.MediaPlayer
 import android.os.Bundle
-import android.os.CountDownTimer
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -23,14 +25,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Divider
 import androidx.compose.material3.ElevatedButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -59,28 +58,38 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.maccproj.ui.theme.MACCProjTheme
 import com.google.gson.JsonObject
-import io.github.sceneview.ar.ARScene
-import io.github.sceneview.ar.rememberARCameraNode
-import io.github.sceneview.model.ModelInstance
-import io.github.sceneview.rememberCollisionSystem
 import io.github.sceneview.rememberEngine
-import com.google.ar.core.Frame
-import com.google.ar.core.TrackingFailureReason
+import io.github.sceneview.node.ModelNode
 import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberNodes
-import io.github.sceneview.rememberView
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import org.json.JSONObject
-import java.util.Date
-import androidx.compose.runtime.LaunchedEffect as LaunchedEffect
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+import io.github.sceneview.Scene
+import io.github.sceneview.math.Position
+import io.github.sceneview.math.Rotation
+import io.github.sceneview.rememberCameraNode
+import io.github.sceneview.rememberEnvironmentLoader
+import java.util.Random
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.os.CountDownTimer
+import androidx.compose.runtime.*
+import dev.romainguy.kotlin.math.Float3
+import io.github.sceneview.rememberCollisionSystem
+import io.github.sceneview.rememberView
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 val viewModel = RetroViewModel()
+var ship_path = "models/ship.glb"
+// Data class to hold bullet and its initial forward direction
+data class Bullet(val node: ModelNode, val direction: Float3)
 class MainActivity : ComponentActivity() {
     lateinit var retroViewModel: RetroViewModel
     lateinit var mediaPlayer: MediaPlayer
@@ -141,8 +150,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-
-
     }
     override fun onPause() {
         super.onPause()
@@ -398,7 +405,7 @@ fun HighscoreScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(100.dp,15.dp,15.dp,15.dp),
+                                    .padding(100.dp, 15.dp, 15.dp, 15.dp),
                                 horizontalArrangement = Arrangement.SpaceEvenly
                             ) {
                                 Text(text = "Position", modifier = Modifier.weight(1f), color = Color.White)
@@ -422,7 +429,7 @@ fun HighscoreScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .background(backgroundColor)
-                                    .padding(100.dp,15.dp,15.dp,15.dp),
+                                    .padding(100.dp, 15.dp, 15.dp, 15.dp),
                                 horizontalArrangement = Arrangement.SpaceEvenly
                             ) {
                                 Text(text = (index + 1).toString(), modifier = Modifier.weight(1f), color = Color.White, fontWeight = textWeight)
@@ -444,6 +451,7 @@ fun HighscoreScreen(
 
 
 
+
 fun formatDate(inputDate: String): String {
     // Define the input and output date formats
     val inputFormat = SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z", Locale.ENGLISH)
@@ -456,41 +464,43 @@ fun formatDate(inputDate: String): String {
     return outputFormat.format(date)
 }
 
-/*
-@Composable
-fun HighscoreScreen(userName: String, navController: NavController, buttonMediaPlayer: MediaPlayer, retroViewModel: RetroViewModel, modifier: Modifier = Modifier) {
-    val mContext = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
-    //var userId by remember { mutableStateOf("Loading...") }
-    var score by remember { mutableStateOf("Loading...") }
-    var allScoreJson = getAllScore(retroViewModel)
-    var allScoreString = ""
 
-    for(scoreJson in allScoreJson){
-        allScoreString += scoreJson.toString()
-    }
-
-    score = getScore(userName, retroViewModel)
-
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
-    ){
-        Column {
-            Text(
-                text = "Welcome $userName!",
-                modifier = modifier
-            )
-            Text(text = "Your highscore is: ${score}!")
-            Text(text = allScoreString)
-        }
-    }
-}*/
 
 
 @Composable
 fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: MediaPlayer, retroViewModel: RetroViewModel) {
 
+    val mContext = LocalContext.current
+    val laserMediaPlayer = MediaPlayer.create(mContext, R.raw.laser)
+    val engine = rememberEngine()
+    val modelLoader = rememberModelLoader(engine)
+    val environmentLoader = rememberEnvironmentLoader(engine)
+
+    val cameraNode = rememberCameraNode(engine).apply {
+        position = Position(x = 0.0f, y = 0.0f ,z = 0.0f)
+    }
+
+    // Add objects relative to the anchor node with random positions between (∣5∣,∣5∣,∣5∣) and (∣15∣,∣15∣,∣15∣)
+    val listObjects = rememberNodes {
+        for (i in 1..10) {
+            val randomPosition = Position(
+                x = Random().nextFloat() * 20 + (10 * (if (Random().nextBoolean()) 1 else -1)),
+                y = Random().nextFloat() * 20 + (10 * (if (Random().nextBoolean()) 1 else -1)),
+                z = Random().nextFloat() * 20 + (10 * (if (Random().nextBoolean()) 1 else -1))
+            )
+            add(ModelNode(
+                modelLoader.createModelInstance("models/ship_1.glb")).apply {
+                position = randomPosition
+                rotation = Float3(0.0f, 0.0f, .0f)
+                scale = Float3(0.4f,0.4f,0.4f)
+                lookAt(cameraNode)
+            })
+        }
+    }
+
+    val gyroscopeRotation by rememberGyroscopeRotation()
+
+    //INIZIO COMMENTO GUI
     var playerscore by remember { mutableStateOf(0) }
 
     var timeLeft by remember { mutableStateOf(20000L) }
@@ -502,6 +512,7 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
     fun onCountdownEnd() {
         showPopup = true
     }
+
 
     // Countdown timer logic
     LaunchedEffect(isTimerRunning) {
@@ -522,87 +533,63 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
 
 
 
-    val mContext = LocalContext.current
-    val laserMediaPlayer = MediaPlayer.create(mContext, R.raw.laser)
+    // List to hold bullets
+    val bullets = remember { mutableStateListOf<Bullet>() }
 
-    /*val engine = rememberEngine()
-    val modelLoader = rememberModelLoader(engine)
-    val model = modelLoader.createModel("model.glb")
-    var frame by remember { mutableStateOf<Frame?>(null) }
-    val childNodes = rememberNodes()
-    val cameraNode = rememberARCameraNode(engine)
-    val view = rememberView(engine)
-    val collisionSystem = rememberCollisionSystem(view)
-    var planeRenderer by remember { mutableStateOf(true) }
-    val modelInstances = remember { mutableListOf<ModelInstance>() }
-    var modelInstancesShips = remember { mutableListOf<ModelInstance>() }
-    var trackingFailureReason by remember {
-        mutableStateOf<TrackingFailureReason?>(null)
+    // Function to shoot bullet
+    fun shootBullet() {
+        val forwardDirection = cameraNode.forwardDirection
+        val bulletNode = ModelNode(modelLoader.createModelInstance("models/laser1.glb")).apply {
+            position = cameraNode.position
+            scale = Float3(2.0f, 2.0f, 2.0f)
+            rotation = cameraNode.rotation
+        }
+        bullets.add(Bullet(bulletNode,forwardDirection))
+        listObjects.add(bulletNode)
     }
-    var sensorManager: SensorManager? = null
-    var accelerometer: Sensor? = null
-    var gyroscope: Sensor? = null
-    val gyroscopeValues = FloatArray(3)
-    var lastTimestamp: Long = 0
-    var tiltDetected = false
-    val context = LocalContext.current
-    sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
 
-    accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-    gyroscope = sensorManager?.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+    // Extension function to calculate distance between two positions
+    fun Position.distanceTo(other: Position): Float {
+        return sqrt(
+            (this.x - other.x).pow(2) +
+                    (this.y - other.y).pow(2) +
+                    (this.z - other.z).pow(2)
+        )
+    }
 
 
-    ARScene(
+
+    Scene(
         modifier = Modifier.fillMaxSize(),
-        childNodes = childNodes,
         engine = engine,
-        view = view,
         modelLoader = modelLoader,
-        collisionSystem = collisionSystem,
-        sessionConfiguration = { session, config ->
-            config.depthMode =
-                when (session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)) {
-                    true -> Config.DepthMode.AUTOMATIC
-                    else -> Config.DepthMode.DISABLED
-                }
-            config.instantPlacementMode = Config.InstantPlacementMode.LOCAL_Y_UP
-            config.lightEstimationMode =
-                Config.LightEstimationMode.ENVIRONMENTAL_HDR
-        },
         cameraNode = cameraNode,
-        planeRenderer = planeRenderer,
-        onTrackingFailureChanged = {
-            trackingFailureReason = it
-        },
-        onSessionCreated = { session ->
-
-           var shipNode = ModelNode(
-                modelInstance = modelInstancesShips.apply {
-                    if (isEmpty()) {
-                        //inserici il path del modello!!!!!!
-                        this += modelLoader.createInstancedModel(kModelFile_Rod, 2)
-                            /*
-                            .apply{
-                            val randomX = random.nextFloat() * 2 - 1 // Random number between -1 and 1
-                            val randomY = random.nextFloat() * 2 - 1 // Random number between -1 and 1
-                            val randomZ = random.nextFloat() * 2 - 1 // Random number between -1 and 1
-                            position = Position(randomX,randoY,randomZ)
-                        }*/
-                    }
-                }.removeLast(),
-                // Scale to fit in a 0.5 meters cube
-                scaleToUnits = 1.0f
-
-            )
-            //val anchornode = AnchorNode(engine = engine, anchor = anchor)
-            //anchornode.addChildNode(rodNode)
-            childNodes += shipNode
-
-        },
-        onSessionUpdated = { session, updatedFrame ->
+        childNodes = listObjects,
+        environment = environmentLoader.createHDREnvironment(
+            assetFileLocation = "environments/sky_2k.hdr"
+        )!!,
+        onFrame = {
+            // Update the camera's rotation based on gyroscope data
+            cameraNode.rotation = gyroscopeRotation
+            listObjects.forEach { node ->
+                //node.position += Float3(0.1f,0.0f,0.0f)
             }
+            // Update bullets positions
+            val iterator = bullets.iterator()
+            while (iterator.hasNext()) {
+                val bullet = iterator.next()
+                bullet.node.position += bullet.direction * 0.2f
 
-    )*/
+                // Check distance from the camera to remove bullet if it exceeds the max distance
+                if (bullet.node.position.distanceTo(cameraNode.position) > 10f) {
+                    Log.println(Log.INFO,"RMV-LASER","Laser removed")
+                    listObjects.remove(bullet.node)
+                    iterator.remove()
+                }
+            }
+        }
+    )
+
 
     // Box for foreground (spaceship's cockpit)
     Box(
@@ -629,6 +616,7 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
                 }
                 laserMediaPlayer.start()
                 playerscore += 1
+                shootBullet()
             },
             modifier = Modifier
                 .padding(0.dp, 0.dp, 10.dp, 120.dp)
@@ -644,8 +632,10 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
         }
     }
 
+    //Vanno reimplementati i box del countdown e del punteggio, perchè il loro update a schermo fa laggare il gioco
+
     // Box for countdown
-    Box(
+    /*Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.BottomStart
     ) {
@@ -701,12 +691,19 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
                     .rotate(-25f)
             )
         }
-    }
+    }*/
+
+
+
 
     // Open the popup menu when the countdown ends
     if (showPopup) {
         val maxScore = getScore(userName, retroViewModel)
-        if(playerscore>maxScore.toInt()){
+        var maxScoreInt = 0
+        if (!maxScore.equals("")) {
+            maxScoreInt = maxScore.toInt()
+        }
+        if(playerscore>maxScoreInt){
             Log.println(Log.INFO,"NEWSCORE","NewScore>OldScore: caricamento in corso!")
             updateScore(userName,playerscore,retroViewModel)
         }else{
@@ -743,18 +740,276 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
             }
         )
     }
+    //FINE COMMENTO GUI
+
+
+    val view = rememberView(engine)
+    val collisionSystem = rememberCollisionSystem(view)
+
+
+
+
+
+
+
+
+
+
+
+
+
+    /*--------Mik code
+    val engine = rememberEngine()
+    val modelLoader = rememberModelLoader(engine)
+    val materialLoader = rememberMaterialLoader(engine)
+    //val model = modelLoader.createModel("model.glb")
+    var frame by remember { mutableStateOf<Frame?>(null) }
+    val childNodes = rememberNodes()
+    val cameraNode = rememberARCameraNode(engine)
+    val view = rememberView(engine)
+    val collisionSystem = rememberCollisionSystem(view)
+    var planeRenderer by remember { mutableStateOf(true) }
+    val modelInstances = remember { mutableListOf<ModelInstance>() }
+    var modelInstancesShips = remember { mutableListOf<ModelInstance>() }
+    var trackingFailureReason by remember {
+        mutableStateOf<TrackingFailureReason?>(null)
+    }
+
+    var sensorManager: SensorManager? = null
+    var accelerometer: Sensor? = null
+    var gyroscope: Sensor? = null
+    val gyroscopeValues = FloatArray(3)
+    var lastTimestamp: Long = 0
+    var tiltDetected = false
+    val context = LocalContext.current
+    sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+
+    accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+    gyroscope = sensorManager?.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+
+
+
+
+    ARScene(
+        modifier = Modifier.fillMaxSize(),
+        childNodes = childNodes,
+        engine = engine,
+        view = view,
+        modelLoader = modelLoader,
+        collisionSystem = collisionSystem,
+        sessionConfiguration = { session, config ->
+            config.depthMode =
+                when (session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)) {
+                    true -> Config.DepthMode.AUTOMATIC
+                    else -> Config.DepthMode.DISABLED
+                }
+            config.instantPlacementMode = Config.InstantPlacementMode.LOCAL_Y_UP
+            config.lightEstimationMode =
+                Config.LightEstimationMode.ENVIRONMENTAL_HDR
+        },
+        cameraNode = cameraNode,
+        planeRenderer = planeRenderer,
+        onTrackingFailureChanged = {
+            trackingFailureReason = it
+        },
+        onSessionCreated = { session ->
+
+            var anchorNode = ModelNode(
+                modelInstance = modelInstancesShips.apply {
+                    if (isEmpty()) {
+                        //inserici il path del modello!!!!!!
+                        this += modelLoader.createInstancedModel(ship_path, 1)
+                        /*
+                        .apply{
+                        val randomX = random.nextFloat() * 2 - 1 // Random number between -1 and 1
+                        val randomY = random.nextFloat() * 2 - 1 // Random number between -1 and 1
+                        val randomZ = random.nextFloat() * 2 - 1 // Random number between -1 and 1
+                        position = Position(randomX,randoY,randomZ)
+                    }*/
+                    }
+                }.removeLast(),
+                // Scale to fit in a 0.5 meters cube
+                scaleToUnits = 0.2f
+
+            )
+            //val anchornode = AnchorNode(engine = engine, anchor = anchor)
+            //anchornode.addChildNode(rodNode)
+            childNodes += shipNode
+
+        },
+        onSessionUpdated = { session, updatedFrame ->
+
+            frame = updatedFrame
+
+        }
+
+    )
+    --------Mik code*/
+
+
+
+
+//---------------TEST OF ARSCENE
+    /*
+    // The destroy calls are automatically made when their disposable effect leaves
+    // the composition or its key changes.
+    val engine = rememberEngine()
+    val modelLoader = rememberModelLoader(engine)
+    val materialLoader = rememberMaterialLoader(engine)
+    val cameraNode = rememberARCameraNode(engine)
+    val childNodes = rememberNodes()
+    val view = rememberView(engine)
+    val collisionSystem = rememberCollisionSystem(view)
+
+    var planeRenderer by remember { mutableStateOf(true) }
+
+    var trackingFailureReason by remember {
+        mutableStateOf<TrackingFailureReason?>(null)
+    }
+    var frame by remember { mutableStateOf<Frame?>(null) }
+
+    ARScene(
+        modifier = Modifier.fillMaxSize(),
+        childNodes = childNodes,
+        engine = engine,
+        view = view,
+        modelLoader = modelLoader,
+        collisionSystem = collisionSystem,
+        sessionConfiguration = { session, config ->
+            config.depthMode =
+                when (session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)) {
+                    true -> Config.DepthMode.AUTOMATIC
+                    else -> Config.DepthMode.DISABLED
+                }
+            config.instantPlacementMode = Config.InstantPlacementMode.LOCAL_Y_UP
+            config.lightEstimationMode =
+                Config.LightEstimationMode.ENVIRONMENTAL_HDR
+        },
+        cameraNode = cameraNode,
+        planeRenderer = planeRenderer,
+        onTrackingFailureChanged = {
+            trackingFailureReason = it
+        },
+        onSessionUpdated = { session, updatedFrame ->
+            frame = updatedFrame
+
+            if (childNodes.isEmpty()) {
+                updatedFrame.getUpdatedPlanes()
+                    .firstOrNull { it.type == Plane.Type.HORIZONTAL_UPWARD_FACING }
+                    ?.let { it.createAnchorOrNull(it.centerPose) }?.let { anchor ->
+                        childNodes += createAnchorNode(
+                            engine = engine,
+                            modelLoader = modelLoader,
+                            materialLoader = materialLoader,
+                            anchor = anchor
+                        )
+                    }
+            }
+        },
+        onGestureListener = rememberOnGestureListener(
+            onSingleTapConfirmed = { motionEvent, node ->
+                if (node == null) {
+                    val hitResults = frame?.hitTest(motionEvent.x, motionEvent.y)
+                    hitResults?.firstOrNull {
+                        it.isValid(
+                            depthPoint = false,
+                            point = false
+                        )
+                    }?.createAnchorOrNull()
+                        ?.let { anchor ->
+                            planeRenderer = false
+                            childNodes += createAnchorNode(
+                                engine = engine,
+                                modelLoader = modelLoader,
+                                materialLoader = materialLoader,
+                                anchor = anchor
+                            )
+                        }
+                }
+            })
+
+    )
+    Text(
+        modifier = Modifier
+            .systemBarsPadding()
+            .fillMaxWidth()
+            .padding(top = 16.dp, start = 32.dp, end = 32.dp),
+        textAlign = TextAlign.Center,
+        fontSize = 28.sp,
+        color = Color.White,
+        text = trackingFailureReason?.let {
+            it.getDescription(LocalContext.current)
+        } ?: if (childNodes.isEmpty()) {
+            stringResource(R.string.point_your_phone_down)
+        } else {
+            stringResource(R.string.tap_anywhere_to_add_model)
+        }
+    )*/
+
+//---------------END TEST
 
 }
 
 
 
 
-/*
-fun extractUserId(input: String): String? {
-    val regex = """userid":(\d+)""".toRegex()
-    val matchResult = regex.find(input)
-    return matchResult?.groups?.get(1)?.value
-}*/
+
+@Composable
+fun rememberGyroscopeRotation(): State<Rotation> {
+    val context = LocalContext.current
+    val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    val gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+
+    val rotationState = remember { mutableStateOf(Rotation()) }
+
+    val sensorEventListener = remember {
+        object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent?) {
+                if (event != null && event.sensor.type == Sensor.TYPE_GYROSCOPE) {
+                    val rotationY = event.values[0]*5/100
+                    val rotationX = -event.values[1]*5/100
+                    //val rotationZ = event.values[2]
+
+                    // Convert radians to degrees
+                    val deltaRotationX = rotationX * 180 / PI.toFloat()
+                    val deltaRotationY = rotationY * 180 / PI.toFloat()
+                    //val deltaRotationZ = rotationZ * 180 / PI.toFloat()
+
+                    // Update rotation state
+                    rotationState.value = Rotation(
+                        x = rotationState.value.x + deltaRotationX,
+                        y = rotationState.value.y + deltaRotationY,
+                        //z = rotationState.value.z + deltaRotationZ
+                    )
+                }
+            }
+
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+        }
+    }
+
+    DisposableEffect(sensorManager, gyroscope) {
+        sensorManager.registerListener(sensorEventListener, gyroscope, SensorManager.SENSOR_DELAY_GAME)
+        onDispose {
+            sensorManager.unregisterListener(sensorEventListener, gyroscope)
+        }
+    }
+
+    return rotationState
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 fun getScore(username: String, retroViewModel: RetroViewModel): String {
     var userMaxScore = ""
@@ -804,30 +1059,5 @@ fun updateScore(username: String, score: Int, retroViewModel: RetroViewModel) {
         }
     }
 }
-
-/*
-fun updateUserMaxScore(name: Int, score: Int, retroViewModel: RetroViewModel) {
-    val newScore = JsonObject().apply {
-        addProperty("username", name)
-        addProperty("maxscore", score)
-    }
-
-    retroViewModel.updateUserMaxScore(newScore)
-
-    val state = retroViewModel.retroUiState
-    when (state) {
-        is RetroUiState.Loading -> {
-        }
-
-        is RetroUiState.Success -> {
-        }
-
-        is RetroUiState.Error -> {
-        }
-    }
-
-
-}*/
-
 
 
