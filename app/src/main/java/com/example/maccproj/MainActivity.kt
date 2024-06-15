@@ -78,6 +78,7 @@ import android.hardware.SensorEventListener
 import android.os.CountDownTimer
 import androidx.compose.runtime.*
 import dev.romainguy.kotlin.math.Float3
+import io.github.sceneview.node.Node
 import io.github.sceneview.rememberCollisionSystem
 import io.github.sceneview.rememberView
 import kotlin.math.PI
@@ -482,21 +483,23 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
 
     // Add objects relative to the anchor node with random positions between (∣5∣,∣5∣,∣5∣) and (∣15∣,∣15∣,∣15∣)
     val listObjects = rememberNodes {
-        for (i in 1..10) {
+        for (i in 1..20) {
             val randomPosition = Position(
-                x = Random().nextFloat() * 20 + (10 * (if (Random().nextBoolean()) 1 else -1)),
-                y = Random().nextFloat() * 20 + (10 * (if (Random().nextBoolean()) 1 else -1)),
-                z = Random().nextFloat() * 20 + (10 * (if (Random().nextBoolean()) 1 else -1))
+                x = Random().nextFloat() * 10 + (10 * (if (Random().nextBoolean()) 1 else -1)),
+                y = Random().nextFloat() * 10 + (10 * (if (Random().nextBoolean()) 1 else -1)),
+                z = Random().nextFloat() * 10 + (10 * (if (Random().nextBoolean()) 1 else -1))
             )
             add(ModelNode(
                 modelLoader.createModelInstance("models/ship_1.glb")).apply {
                 position = randomPosition
-                rotation = Float3(0.0f, 0.0f, .0f)
-                scale = Float3(0.4f,0.4f,0.4f)
+                rotation = Float3(0.0f, 0.0f, 0.0f)
+                scale = Float3(0.3f,0.3f,0.3f)
                 lookAt(cameraNode)
             })
         }
     }
+
+    val spaceshipObjects = listObjects
 
     val gyroscopeRotation by rememberGyroscopeRotation()
 
@@ -557,6 +560,18 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
         )
     }
 
+    val COLLISION_THRESHOLD = 1.0f // Adjust this value based on your models' sizes
+
+    // Function to check collision between a bullet and other nodes
+    fun checkCollision(bullet: ModelNode): Node? {
+        for (node in spaceshipObjects) {
+            if (node != bullet && bullet.position.distanceTo(node.position) < COLLISION_THRESHOLD) {
+                return node
+            }
+        }
+        return null
+    }
+
 
 
     Scene(
@@ -580,13 +595,21 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
                 val bullet = iterator.next()
                 bullet.node.position += bullet.direction * 0.2f
 
-                // Check distance from the camera to remove bullet if it exceeds the max distance
-                if (bullet.node.position.distanceTo(cameraNode.position) > 10f) {
-                    Log.println(Log.INFO,"RMV-LASER","Laser removed")
+                // Check if the bullet collides with any object
+                val collidedNode = checkCollision(bullet.node)
+                if (collidedNode != null) {
+                    // Handle collision: remove both the bullet and the collided object
+                    listObjects.remove(collidedNode)
                     listObjects.remove(bullet.node)
                     iterator.remove()
+
+                    playerscore += 1
+
+                    // Play collision sound or any other action
+                    //laserMediaPlayer.start()
                 }
             }
+
         }
     )
 
@@ -615,7 +638,7 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
                     laserMediaPlayer.prepare()
                 }
                 laserMediaPlayer.start()
-                playerscore += 1
+                //playerscore += 1
                 shootBullet()
             },
             modifier = Modifier
@@ -715,13 +738,13 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
             title = { Text(text = "Game Over", fontWeight = FontWeight.Bold, fontSize = 24.sp) },
             text = {
                 Column {
-                    Text("Player's Points: ${playerscore}", fontSize = 20.sp) // Replace with actual points
+                    Text("Player's Points: ${playerscore}", fontSize = 20.sp)
                 }
             },
             confirmButton = {
                 ElevatedButton(onClick = {
                     showPopup = false
-                    navController.navigate("arscreen") { // Replace "current_screen" with your current screen route
+                    navController.navigate("arscreen") {
                         popUpTo("arscreen") { inclusive = true }
                     }
                 }
@@ -732,7 +755,7 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
             dismissButton = {
                 ElevatedButton(onClick = {
                     showPopup = false
-                    navController.navigate("menu") // Replace "menu" with your menu screen route
+                    navController.navigate("menu")
                 }
                 ) {
                     Text("Go to Menu")
@@ -949,7 +972,6 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
 //---------------END TEST
 
 }
-
 
 
 
