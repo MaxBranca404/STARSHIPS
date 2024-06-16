@@ -473,7 +473,6 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
 
     val mContext = LocalContext.current
     val laserMediaPlayer = MediaPlayer.create(mContext, R.raw.laser)
-    val explosionMediaPlayer = MediaPlayer.create(mContext, R.raw.explosion)
     val engine = rememberEngine()
     val modelLoader = rememberModelLoader(engine)
     val environmentLoader = rememberEnvironmentLoader(engine)
@@ -561,17 +560,12 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
         )
     }
 
-    val COLLISION_THRESHOLD = 0.5f // Adjust this value based on your models' sizes
+    val COLLISION_THRESHOLD = 1.0f // Adjust this value based on your models' sizes
 
     // Function to check collision between a bullet and other nodes
     fun checkCollision(bullet: ModelNode): Node? {
         for (node in spaceshipObjects) {
             if (node != bullet && bullet.position.distanceTo(node.position) < COLLISION_THRESHOLD) {
-                if (explosionMediaPlayer.isPlaying) {
-                    explosionMediaPlayer.stop()
-                    explosionMediaPlayer.prepare()
-                }
-                explosionMediaPlayer.start()
                 return node
             }
         }
