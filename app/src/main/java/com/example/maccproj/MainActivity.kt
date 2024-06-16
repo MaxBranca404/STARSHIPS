@@ -78,12 +78,9 @@ import android.hardware.SensorEventListener
 import android.os.CountDownTimer
 import androidx.compose.runtime.*
 import dev.romainguy.kotlin.math.Float3
-import io.github.sceneview.node.ImageNode
 import io.github.sceneview.node.Node
 import io.github.sceneview.rememberCollisionSystem
-import io.github.sceneview.rememberMaterialLoader
 import io.github.sceneview.rememberView
-import io.github.sceneview.texture.ImageTexture
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.pow
@@ -94,7 +91,6 @@ val viewModel = RetroViewModel()
 var ship_path = "models/ship.glb"
 // Data class to hold bullet and its initial forward direction
 data class Bullet(val node: ModelNode, val direction: Float3)
-data class Explosion(val node: ModelNode, var FrameCount: Int)
 class MainActivity : ComponentActivity() {
     lateinit var retroViewModel: RetroViewModel
     lateinit var mediaPlayer: MediaPlayer
@@ -477,11 +473,10 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
 
     val mContext = LocalContext.current
     val laserMediaPlayer = MediaPlayer.create(mContext, R.raw.laser)
-    val explosionMediaPlayer = MediaPlayer.create(mContext,R.raw.explosion)
     val engine = rememberEngine()
     val modelLoader = rememberModelLoader(engine)
-    val materialLoader = rememberMaterialLoader(engine)
     val environmentLoader = rememberEnvironmentLoader(engine)
+
     val cameraNode = rememberCameraNode(engine).apply {
         position = Position(x = 0.0f, y = 0.0f ,z = 0.0f)
     }
@@ -556,23 +551,6 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
         listObjects.add(bulletNode)
     }
 
-    //list to hold explosions
-
-    val explosions = remember { mutableStateListOf<Explosion>() }
-
-    fun explode(shipPos: Position) {
-        val explosionNode = ModelNode(modelLoader.createModelInstance("models/explosion.glb")).apply {
-            position = shipPos
-            scale = Float3(0.2f, 0.2f, 0.2f)
-            rotation = cameraNode.rotation
-        }
-        explosions.add(Explosion(explosionNode,0))
-        listObjects.add(explosionNode)
-
-    }
-
-
-
     // Extension function to calculate distance between two positions
     fun Position.distanceTo(other: Position): Float {
         return sqrt(
@@ -582,7 +560,7 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
         )
     }
 
-    val COLLISION_THRESHOLD = 5.0f // Adjust this value based on your models' sizes
+    val COLLISION_THRESHOLD = 1.0f // Adjust this value based on your models' sizes
 
     // Function to check collision between a bullet and other nodes
     fun checkCollision(bullet: ModelNode): Node? {
@@ -603,8 +581,7 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
         cameraNode = cameraNode,
         childNodes = listObjects,
         environment = environmentLoader.createHDREnvironment(
-            //assetFileLocation = "environments/sky_2k.hdr"
-            assetFileLocation = "environments/space.hdr"
+            assetFileLocation = "environments/sky_2k.hdr"
         )!!,
         onFrame = {
             // Update the camera's rotation based on gyroscope data
@@ -621,44 +598,18 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
                 // Check if the bullet collides with any object
                 val collidedNode = checkCollision(bullet.node)
                 if (collidedNode != null) {
-
-                    val shipPose = collidedNode.position
-
                     // Handle collision: remove both the bullet and the collided object
-
                     listObjects.remove(collidedNode)
                     listObjects.remove(bullet.node)
-
-                    explode(shipPose)
-
-                    if (explosionMediaPlayer.isPlaying) {
-                        explosionMediaPlayer.stop()
-                        explosionMediaPlayer.prepare()
-                    }
-
-                    explosionMediaPlayer.start()
-
                     iterator.remove()
+
                     playerscore += 1
 
                     // Play collision sound or any other action
                     //laserMediaPlayer.start()
                 }
             }
-            val iteratorE = explosions.iterator()
-            while (iteratorE.hasNext()) {
-                val explosion = iteratorE.next()
-                explosion.FrameCount +=1
-                if (explosion.FrameCount >= 35) {
 
-                    //explosions.remove(explosion)
-                    listObjects.remove(explosion.node)
-                    iteratorE.remove()
-
-                }
-
-
-            }
         }
     )
 
