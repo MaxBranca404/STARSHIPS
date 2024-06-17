@@ -36,6 +36,10 @@ class RetroViewModel : ViewModel() {
     var retroAllScoreState = listOf<JsonObject>()
         public set
 
+    // Check user registration status
+    var isRegistered: RetroState by mutableStateOf(RetroState.Loading)
+        public set
+
 
     fun addUser(data :JsonObject) {
         viewModelScope.launch {
@@ -86,6 +90,31 @@ class RetroViewModel : ViewModel() {
                 listOf<JsonObject>()
             }
 
+        }
+    }
+
+    fun checkUser(username: String) {
+        viewModelScope.launch {
+            try {
+                val response = RetroAPI.retrofitService.checkUser(username)
+
+                if (response.isSuccessful) {
+                    val jsonResult = response.body()
+
+                    if (jsonResult != null) {
+                        isRegistered = RetroState.Success(jsonResult)
+                    } else {
+                        Log.e("RetroViewModel", "Response body is null")
+                        isRegistered = RetroState.Error // Handle null response body
+                    }
+                } else {
+                    Log.e("RetroViewModel", "Unsuccessful response: ${response.code()}")
+                    isRegistered = RetroState.Error // Handle unsuccessful response
+                }
+            } catch (e: Exception) {
+                Log.e("RetroViewModel", "Exception: ${e.message}")
+                isRegistered = RetroState.Error // Handle exception
+            }
         }
     }
 }

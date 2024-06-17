@@ -129,7 +129,7 @@ class MainActivity : ComponentActivity() {
                     setContent {
                         retroViewModel = viewModel()
                         UserRegistrationScreen { username ->
-                            registerUser(username, retroViewModel)
+                            checkUser(username, retroViewModel)
                         }
                     }
                 } else {
@@ -146,7 +146,7 @@ class MainActivity : ComponentActivity() {
                             NavHost(navController, startDestination = "menu") {
                                 composable("menu") { MenuScreen(userName, navController, buttonMediaPlayer) }
                                 composable("highscore") { HighscoreScreen(userName, navController, buttonMediaPlayer, retroViewModel) }
-                                composable("arscreen") { ARScreen(userName, navController, buttonMediaPlayer, retroViewModel) }
+                                composable("vrscreen") { VRScreen(userName, navController, buttonMediaPlayer, retroViewModel) }
                                 /*composable("menu") { MenuScreen(navController, buttonMediaPlayer) }
                                 composable("highscore") { HighscoreScreen(navController, buttonMediaPlayer) }*/
                             }
@@ -171,7 +171,36 @@ class MainActivity : ComponentActivity() {
         mediaPlayer.release()
     }
 
-    private fun registerUser(username: String, retroViewModel: RetroViewModel) {
+    private fun checkUser(username: String, retroViewModel: RetroViewModel) {
+
+        // Check if the user is already registered
+        retroViewModel.checkUser(username)
+
+        val state = retroViewModel.isRegistered
+        when(state){
+            is RetroState.Loading -> {
+            }
+
+            is RetroState.Success -> {
+                Log.println(Log.INFO,"REGISTERED", "Utente già registrato!")
+                lifecycleScope.launch {
+                    UserPreferences.saveUsername(applicationContext, username)
+                    // Now that the username is saved, restart the activity to show the main content
+                    delay(2000)
+                    recreate()
+                }
+            }
+
+            is RetroState.Error -> {
+                Log.println(Log.INFO,"NOT_REGISTERED", "Utente non registrato!")
+                registerUser(username, retroViewModel)
+            }
+
+        }
+
+    }
+
+    private fun registerUser(username: String, retroViewModel: RetroViewModel){
         // Prepare the new user data
         val newUser = JsonObject().apply {
             addProperty("username", username)
@@ -276,7 +305,7 @@ fun MenuScreen(userName: String, navController: NavController, buttonMediaPlayer
             Row(verticalAlignment = Alignment.CenterVertically){
                 ElevatedButton(
                     onClick = {
-                        navController.navigate("arscreen")
+                        navController.navigate("vrscreen")
                         buttonMediaPlayer.start()
                     },
                     modifier = Modifier.width(150.dp),
@@ -473,7 +502,7 @@ fun formatDate(inputDate: String): String {
 
 
 @Composable
-fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: MediaPlayer, retroViewModel: RetroViewModel) {
+fun VRScreen(userName: String, navController: NavController, buttonMediaPlayer: MediaPlayer, retroViewModel: RetroViewModel) {
 
     val mContext = LocalContext.current
     val laserMediaPlayer = MediaPlayer.create(mContext, R.raw.laser)
@@ -604,7 +633,7 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
         childNodes = listObjects,
         environment = environmentLoader.createHDREnvironment(
             //assetFileLocation = "environments/sky_2k.hdr"
-            assetFileLocation = "environments/space.hdr"
+            assetFileLocation = "environments/Nebula2.hdr"
         )!!,
         onFrame = {
             // Update the camera's rotation based on gyroscope data
@@ -793,8 +822,8 @@ fun ARScreen(userName: String, navController: NavController, buttonMediaPlayer: 
             confirmButton = {
                 ElevatedButton(onClick = {
                     showPopup = false
-                    navController.navigate("arscreen") {
-                        popUpTo("arscreen") { inclusive = true }
+                    navController.navigate("vrscreen") {
+                        popUpTo("vrscreen") { inclusive = true }
                     }
                 }
                 ) {

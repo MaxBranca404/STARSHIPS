@@ -17,7 +17,7 @@ def test_add_user():
 # Function to update the user's score
 def test_update_score():
     endpoint = '/update_score'
-    params = {'username': 'test_user', 'score': 150}
+    params = {'username': 'gamer', 'score': 150}
     response = requests.put(base_url + endpoint, json=params)
     print(f'Update Score Status Code: {response.status_code}')
     if response.status_code == 200:
@@ -55,6 +55,20 @@ def test_all_user():
     data = response.json()
     print('User score retrieved:', data)
 
+# Function to check if a user exists
+def test_check_user():
+    endpoint = '/checkUser'
+    params = {'username': 'mauro'}
+    response = requests.get(base_url + endpoint, params=params)
+    print(f'Check User Status Code: {response.status_code}')
+    if response.status_code == 200:
+        data = response.json()
+        print('User exists:', data)
+    elif response.status_code == 404:
+        print('User does not exist')
+    else:
+        print('Error checking user')
+
 # Run all tests
 def run_tests():
     test_add_user()
@@ -62,6 +76,7 @@ def run_tests():
     test_get_score()
     test_user_not_found()
     test_all_user()
+    test_check_user()
 
 if __name__ == '__main__':
     run_tests()

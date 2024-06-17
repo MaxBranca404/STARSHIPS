@@ -2,6 +2,7 @@ package com.example.maccproj
 
 import com.google.gson.JsonObject
 import retrofit2.Call
+import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
@@ -39,4 +40,7 @@ interface RetroAPIService {
 
     @GET("/get_all_score")
     suspend fun getAllScore(): List<JsonObject>
+
+    @GET("/checkUser")
+    suspend fun checkUser(@Query("username") username: String): Response<JsonObject>
 }

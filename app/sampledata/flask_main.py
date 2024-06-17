@@ -86,6 +86,20 @@ def get_all_score():
 
     return jsonify(top_scores),200
 
+@app.route('/checkUser', methods=['GET'])
+def check_user():
+    check_db_connection()
+    username = request.args.get('username')
+
+    sql = "SELECT username FROM scores WHERE username = %s"
+
+    cursor.execute(sql, (username,))
+    result = cursor.fetchone()
+
+    if result:
+        return jsonify({'exists': True}), 200
+    else:
+        return jsonify({'exists': False}), 404
 
 if __name__ == '__main__':
     app.run()
