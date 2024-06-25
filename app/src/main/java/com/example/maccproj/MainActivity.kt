@@ -76,7 +76,13 @@ import java.util.Random
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.os.CountDownTimer
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.runtime.*
+import androidx.compose.ui.layout.SubcomposeLayout
 import dev.romainguy.kotlin.math.Float3
 import io.github.sceneview.node.ImageNode
 import io.github.sceneview.node.Node
@@ -89,6 +95,7 @@ import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
+
 
 val viewModel = RetroViewModel()
 var ship_path = "models/ship.glb"
@@ -507,6 +514,7 @@ fun VRScreen(userName: String, navController: NavController, buttonMediaPlayer: 
     val mContext = LocalContext.current
     val laserMediaPlayer = MediaPlayer.create(mContext, R.raw.laser)
     val explosionMediaPlayer = MediaPlayer.create(mContext,R.raw.explosion)
+    val countdownMediaPlayer = MediaPlayer.create(mContext,R.raw.countdown)
     val engine = rememberEngine()
     val modelLoader = rememberModelLoader(engine)
     val materialLoader = rememberMaterialLoader(engine)
@@ -540,15 +548,19 @@ fun VRScreen(userName: String, navController: NavController, buttonMediaPlayer: 
     //INIZIO COMMENTO GUI
     var playerscore by remember { mutableStateOf(0) }
 
-    var timeLeft by remember { mutableStateOf(20000L) }
+    var timeLeft by remember { mutableStateOf(40000L) }
     var isTimerRunning by remember { mutableStateOf(false) }
     var showPopup by remember { mutableStateOf(false) }
-
-    isTimerRunning = true
+    var timeRunningOut by remember { mutableStateOf(false) }
 
     fun onCountdownEnd() {
         showPopup = true
     }
+
+    // Timer bar logic
+    val totalTime = 40000L
+    val timeBarWidth by remember { derivedStateOf { (timeLeft.toFloat() / totalTime.toFloat()) * 100f } }
+    val timeBarColor by remember { derivedStateOf { if (timeLeft <= 5000L) Color.Red else Color.Green } }
 
 
     // Countdown timer logic
@@ -557,6 +569,9 @@ fun VRScreen(userName: String, navController: NavController, buttonMediaPlayer: 
             object : CountDownTimer(timeLeft, 1000) {
                 override fun onTick(millisUntilFinished: Long) {
                     timeLeft = millisUntilFinished
+                    if(timeLeft<=12000){
+                        timeRunningOut = true
+                    }
                 }
 
                 override fun onFinish() {
@@ -568,6 +583,24 @@ fun VRScreen(userName: String, navController: NavController, buttonMediaPlayer: 
         }
     }
 
+    // Countdown start logic
+    var startCountdown by remember { mutableStateOf(true) }
+    var startCountdownTimeLeft by remember { mutableStateOf(4000L) }
+
+    LaunchedEffect(startCountdown) {
+        if (startCountdown) {
+            object : CountDownTimer(startCountdownTimeLeft, 1000) {
+                override fun onTick(millisUntilFinished: Long) {
+                    startCountdownTimeLeft = millisUntilFinished
+                }
+
+                override fun onFinish() {
+                    startCountdown = false
+                    isTimerRunning = true // Start the main game timer
+                }
+            }.start()
+        }
+    }
 
 
     // List to hold bullets
@@ -611,7 +644,7 @@ fun VRScreen(userName: String, navController: NavController, buttonMediaPlayer: 
         )
     }
 
-    val COLLISION_THRESHOLD = 5.0f // Adjust this value based on your models' sizes
+    val COLLISION_THRESHOLD = 1.0f // Adjust this value based on your models' sizes
 
     // Function to check collision between a bullet and other nodes
     fun checkCollision(bullet: ModelNode): Node? {
@@ -632,8 +665,8 @@ fun VRScreen(userName: String, navController: NavController, buttonMediaPlayer: 
         cameraNode = cameraNode,
         childNodes = listObjects,
         environment = environmentLoader.createHDREnvironment(
-            //assetFileLocation = "environments/sky_2k.hdr"
-            assetFileLocation = "environments/Nebula2.hdr"
+            assetFileLocation = "environments/sky_2k.hdr"
+            //assetFileLocation = "environments/Nebula2.hdr"
         )!!,
         onFrame = {
             // Update the camera's rotation based on gyroscope data
@@ -670,8 +703,6 @@ fun VRScreen(userName: String, navController: NavController, buttonMediaPlayer: 
                     iterator.remove()
                     playerscore += 1
 
-                    // Play collision sound or any other action
-                    //laserMediaPlayer.start()
                 }
             }
             val iteratorE = explosions.iterator()
@@ -685,8 +716,6 @@ fun VRScreen(userName: String, navController: NavController, buttonMediaPlayer: 
                     iteratorE.remove()
 
                 }
-
-
             }
         }
     )
@@ -711,13 +740,16 @@ fun VRScreen(userName: String, navController: NavController, buttonMediaPlayer: 
     ) {
         ElevatedButton(
             onClick = {
-                if (laserMediaPlayer.isPlaying) {
-                    laserMediaPlayer.stop()
-                    laserMediaPlayer.prepare()
+                if (startCountdown) {
+                    // No shooting until the game starts
+                }else{
+                    if (laserMediaPlayer.isPlaying) {
+                        laserMediaPlayer.stop()
+                        laserMediaPlayer.prepare()
+                    }
+                    laserMediaPlayer.start()
+                    shootBullet()
                 }
-                laserMediaPlayer.start()
-                //playerscore += 1
-                shootBullet()
             },
             modifier = Modifier
                 .padding(0.dp, 0.dp, 10.dp, 120.dp)
@@ -733,68 +765,50 @@ fun VRScreen(userName: String, navController: NavController, buttonMediaPlayer: 
         }
     }
 
-    //Vanno reimplementati i box del countdown e del punteggio, perchè il loro update a schermo fa laggare il gioco
-
-    // Box for countdown
-    /*Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.BottomStart
-    ) {
-        if (isTimerRunning) {
-            if(timeLeft/1000 < 10){
-                Text(
-                    text = "0${timeLeft / 1000}",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 40.sp,
-                    color = Color.White,
-                    modifier = Modifier
-                        .padding(30.dp, 0.dp, 0.dp, 30.dp)
-                        .rotate(25f)
-                )
-            }else{
-                Text(
-                    text = "${timeLeft / 1000}",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 40.sp,
-                    color = Color.White,
-                    modifier = Modifier
-                        .padding(30.dp, 0.dp, 0.dp, 30.dp)
-                        .rotate(25f)
-                )
+    // Overlay for start countdown
+    if (startCountdown) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0x80000000)), // Semi-transparent dark overlay
+            contentAlignment = Alignment.Center
+        ) {
+            val countdownText = when {
+                startCountdownTimeLeft > 3000L -> "3"
+                startCountdownTimeLeft > 2000L -> "2"
+                startCountdownTimeLeft > 1000L -> "1"
+                else -> "START"
             }
-
+            Text(
+                text = countdownText,
+                fontSize = 100.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
         }
     }
 
-    // Box for player score
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.BottomEnd
-    ) {
-        if(playerscore < 10){
+
+    // Start the countdown when timeleft is 10 seconds
+    if (timeRunningOut) {
+        LaunchedEffect(Unit) {
+            countdownMediaPlayer.start()
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = 20.dp),
+            contentAlignment = Alignment.BottomCenter
+        ) {
             Text(
-                text = "0${playerscore}",
+                text = "COME ON!",
+                fontSize = 25.sp,
                 fontWeight = FontWeight.Bold,
-                fontSize = 40.sp,
-                color = Color.White,
-                modifier = Modifier
-                    .padding(0.dp, 0.dp, 30.dp, 30.dp)
-                    .rotate(-25f)
-            )
-        }else{
-            Text(
-                text = "${playerscore}",
-                fontWeight = FontWeight.Bold,
-                fontSize = 40.sp,
-                color = Color.White,
-                modifier = Modifier
-                    .padding(0.dp, 0.dp, 30.dp, 30.dp)
-                    .rotate(-25f)
+                color = Color.White
             )
         }
-    }*/
-
-
+    }
 
 
     // Open the popup menu when the countdown ends
@@ -847,208 +861,6 @@ fun VRScreen(userName: String, navController: NavController, buttonMediaPlayer: 
     val view = rememberView(engine)
     val collisionSystem = rememberCollisionSystem(view)
 
-
-
-
-
-
-
-
-
-
-
-
-
-    /*--------Mik code
-    val engine = rememberEngine()
-    val modelLoader = rememberModelLoader(engine)
-    val materialLoader = rememberMaterialLoader(engine)
-    //val model = modelLoader.createModel("model.glb")
-    var frame by remember { mutableStateOf<Frame?>(null) }
-    val childNodes = rememberNodes()
-    val cameraNode = rememberARCameraNode(engine)
-    val view = rememberView(engine)
-    val collisionSystem = rememberCollisionSystem(view)
-    var planeRenderer by remember { mutableStateOf(true) }
-    val modelInstances = remember { mutableListOf<ModelInstance>() }
-    var modelInstancesShips = remember { mutableListOf<ModelInstance>() }
-    var trackingFailureReason by remember {
-        mutableStateOf<TrackingFailureReason?>(null)
-    }
-
-    var sensorManager: SensorManager? = null
-    var accelerometer: Sensor? = null
-    var gyroscope: Sensor? = null
-    val gyroscopeValues = FloatArray(3)
-    var lastTimestamp: Long = 0
-    var tiltDetected = false
-    val context = LocalContext.current
-    sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-
-    accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-    gyroscope = sensorManager?.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
-
-
-
-
-    ARScene(
-        modifier = Modifier.fillMaxSize(),
-        childNodes = childNodes,
-        engine = engine,
-        view = view,
-        modelLoader = modelLoader,
-        collisionSystem = collisionSystem,
-        sessionConfiguration = { session, config ->
-            config.depthMode =
-                when (session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)) {
-                    true -> Config.DepthMode.AUTOMATIC
-                    else -> Config.DepthMode.DISABLED
-                }
-            config.instantPlacementMode = Config.InstantPlacementMode.LOCAL_Y_UP
-            config.lightEstimationMode =
-                Config.LightEstimationMode.ENVIRONMENTAL_HDR
-        },
-        cameraNode = cameraNode,
-        planeRenderer = planeRenderer,
-        onTrackingFailureChanged = {
-            trackingFailureReason = it
-        },
-        onSessionCreated = { session ->
-
-            var anchorNode = ModelNode(
-                modelInstance = modelInstancesShips.apply {
-                    if (isEmpty()) {
-                        //inserici il path del modello!!!!!!
-                        this += modelLoader.createInstancedModel(ship_path, 1)
-                        /*
-                        .apply{
-                        val randomX = random.nextFloat() * 2 - 1 // Random number between -1 and 1
-                        val randomY = random.nextFloat() * 2 - 1 // Random number between -1 and 1
-                        val randomZ = random.nextFloat() * 2 - 1 // Random number between -1 and 1
-                        position = Position(randomX,randoY,randomZ)
-                    }*/
-                    }
-                }.removeLast(),
-                // Scale to fit in a 0.5 meters cube
-                scaleToUnits = 0.2f
-
-            )
-            //val anchornode = AnchorNode(engine = engine, anchor = anchor)
-            //anchornode.addChildNode(rodNode)
-            childNodes += shipNode
-
-        },
-        onSessionUpdated = { session, updatedFrame ->
-
-            frame = updatedFrame
-
-        }
-
-    )
-    --------Mik code*/
-
-
-
-
-//---------------TEST OF ARSCENE
-    /*
-    // The destroy calls are automatically made when their disposable effect leaves
-    // the composition or its key changes.
-    val engine = rememberEngine()
-    val modelLoader = rememberModelLoader(engine)
-    val materialLoader = rememberMaterialLoader(engine)
-    val cameraNode = rememberARCameraNode(engine)
-    val childNodes = rememberNodes()
-    val view = rememberView(engine)
-    val collisionSystem = rememberCollisionSystem(view)
-
-    var planeRenderer by remember { mutableStateOf(true) }
-
-    var trackingFailureReason by remember {
-        mutableStateOf<TrackingFailureReason?>(null)
-    }
-    var frame by remember { mutableStateOf<Frame?>(null) }
-
-    ARScene(
-        modifier = Modifier.fillMaxSize(),
-        childNodes = childNodes,
-        engine = engine,
-        view = view,
-        modelLoader = modelLoader,
-        collisionSystem = collisionSystem,
-        sessionConfiguration = { session, config ->
-            config.depthMode =
-                when (session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)) {
-                    true -> Config.DepthMode.AUTOMATIC
-                    else -> Config.DepthMode.DISABLED
-                }
-            config.instantPlacementMode = Config.InstantPlacementMode.LOCAL_Y_UP
-            config.lightEstimationMode =
-                Config.LightEstimationMode.ENVIRONMENTAL_HDR
-        },
-        cameraNode = cameraNode,
-        planeRenderer = planeRenderer,
-        onTrackingFailureChanged = {
-            trackingFailureReason = it
-        },
-        onSessionUpdated = { session, updatedFrame ->
-            frame = updatedFrame
-
-            if (childNodes.isEmpty()) {
-                updatedFrame.getUpdatedPlanes()
-                    .firstOrNull { it.type == Plane.Type.HORIZONTAL_UPWARD_FACING }
-                    ?.let { it.createAnchorOrNull(it.centerPose) }?.let { anchor ->
-                        childNodes += createAnchorNode(
-                            engine = engine,
-                            modelLoader = modelLoader,
-                            materialLoader = materialLoader,
-                            anchor = anchor
-                        )
-                    }
-            }
-        },
-        onGestureListener = rememberOnGestureListener(
-            onSingleTapConfirmed = { motionEvent, node ->
-                if (node == null) {
-                    val hitResults = frame?.hitTest(motionEvent.x, motionEvent.y)
-                    hitResults?.firstOrNull {
-                        it.isValid(
-                            depthPoint = false,
-                            point = false
-                        )
-                    }?.createAnchorOrNull()
-                        ?.let { anchor ->
-                            planeRenderer = false
-                            childNodes += createAnchorNode(
-                                engine = engine,
-                                modelLoader = modelLoader,
-                                materialLoader = materialLoader,
-                                anchor = anchor
-                            )
-                        }
-                }
-            })
-
-    )
-    Text(
-        modifier = Modifier
-            .systemBarsPadding()
-            .fillMaxWidth()
-            .padding(top = 16.dp, start = 32.dp, end = 32.dp),
-        textAlign = TextAlign.Center,
-        fontSize = 28.sp,
-        color = Color.White,
-        text = trackingFailureReason?.let {
-            it.getDescription(LocalContext.current)
-        } ?: if (childNodes.isEmpty()) {
-            stringResource(R.string.point_your_phone_down)
-        } else {
-            stringResource(R.string.tap_anywhere_to_add_model)
-        }
-    )*/
-
-//---------------END TEST
-
 }
 
 
@@ -1097,18 +909,6 @@ fun rememberGyroscopeRotation(): State<Rotation> {
 
     return rotationState
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 fun getScore(username: String, retroViewModel: RetroViewModel): String {
@@ -1161,3 +961,103 @@ fun updateScore(username: String, score: Int, retroViewModel: RetroViewModel) {
 }
 
 
+
+
+//---------------TEST OF ARSCENE
+/*
+// The destroy calls are automatically made when their disposable effect leaves
+// the composition or its key changes.
+val engine = rememberEngine()
+val modelLoader = rememberModelLoader(engine)
+val materialLoader = rememberMaterialLoader(engine)
+val cameraNode = rememberARCameraNode(engine)
+val childNodes = rememberNodes()
+val view = rememberView(engine)
+val collisionSystem = rememberCollisionSystem(view)
+
+var planeRenderer by remember { mutableStateOf(true) }
+
+var trackingFailureReason by remember {
+    mutableStateOf<TrackingFailureReason?>(null)
+}
+var frame by remember { mutableStateOf<Frame?>(null) }
+
+ARScene(
+    modifier = Modifier.fillMaxSize(),
+    childNodes = childNodes,
+    engine = engine,
+    view = view,
+    modelLoader = modelLoader,
+    collisionSystem = collisionSystem,
+    sessionConfiguration = { session, config ->
+        config.depthMode =
+            when (session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)) {
+                true -> Config.DepthMode.AUTOMATIC
+                else -> Config.DepthMode.DISABLED
+            }
+        config.instantPlacementMode = Config.InstantPlacementMode.LOCAL_Y_UP
+        config.lightEstimationMode =
+            Config.LightEstimationMode.ENVIRONMENTAL_HDR
+    },
+    cameraNode = cameraNode,
+    planeRenderer = planeRenderer,
+    onTrackingFailureChanged = {
+        trackingFailureReason = it
+    },
+    onSessionUpdated = { session, updatedFrame ->
+        frame = updatedFrame
+
+        if (childNodes.isEmpty()) {
+            updatedFrame.getUpdatedPlanes()
+                .firstOrNull { it.type == Plane.Type.HORIZONTAL_UPWARD_FACING }
+                ?.let { it.createAnchorOrNull(it.centerPose) }?.let { anchor ->
+                    childNodes += createAnchorNode(
+                        engine = engine,
+                        modelLoader = modelLoader,
+                        materialLoader = materialLoader,
+                        anchor = anchor
+                    )
+                }
+        }
+    },
+    onGestureListener = rememberOnGestureListener(
+        onSingleTapConfirmed = { motionEvent, node ->
+            if (node == null) {
+                val hitResults = frame?.hitTest(motionEvent.x, motionEvent.y)
+                hitResults?.firstOrNull {
+                    it.isValid(
+                        depthPoint = false,
+                        point = false
+                    )
+                }?.createAnchorOrNull()
+                    ?.let { anchor ->
+                        planeRenderer = false
+                        childNodes += createAnchorNode(
+                            engine = engine,
+                            modelLoader = modelLoader,
+                            materialLoader = materialLoader,
+                            anchor = anchor
+                        )
+                    }
+            }
+        })
+
+)
+Text(
+    modifier = Modifier
+        .systemBarsPadding()
+        .fillMaxWidth()
+        .padding(top = 16.dp, start = 32.dp, end = 32.dp),
+    textAlign = TextAlign.Center,
+    fontSize = 28.sp,
+    color = Color.White,
+    text = trackingFailureReason?.let {
+        it.getDescription(LocalContext.current)
+    } ?: if (childNodes.isEmpty()) {
+        stringResource(R.string.point_your_phone_down)
+    } else {
+        stringResource(R.string.tap_anywhere_to_add_model)
+    }
+)*/
+
+//---------------END TEST
