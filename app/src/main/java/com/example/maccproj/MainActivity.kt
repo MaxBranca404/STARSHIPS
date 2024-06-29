@@ -2,7 +2,6 @@ package com.example.maccproj
 
 import android.content.Context
 import android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-import android.graphics.Point
 import android.hardware.Sensor
 import android.hardware.SensorManager
 import android.media.MediaPlayer
@@ -42,7 +41,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.paint
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -66,7 +64,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
-
 import io.github.sceneview.Scene
 import io.github.sceneview.math.Position
 import io.github.sceneview.math.Rotation
@@ -76,26 +73,21 @@ import java.util.Random
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.os.CountDownTimer
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.clickable
 import androidx.compose.runtime.*
-import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.text.style.TextAlign
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import dev.romainguy.kotlin.math.Float3
-import io.github.sceneview.node.ImageNode
 import io.github.sceneview.node.Node
 import io.github.sceneview.rememberCollisionSystem
 import io.github.sceneview.rememberMaterialLoader
 import io.github.sceneview.rememberView
-import io.github.sceneview.texture.ImageTexture
 import kotlin.math.PI
-import kotlin.math.cos
 import kotlin.math.pow
-import kotlin.math.sin
 import kotlin.math.sqrt
-
 
 val viewModel = RetroViewModel()
 var ship_path = "models/ship.glb"
@@ -153,9 +145,14 @@ class MainActivity : ComponentActivity() {
                             NavHost(navController, startDestination = "menu") {
                                 composable("menu") { MenuScreen(userName, navController, buttonMediaPlayer) }
                                 composable("highscore") { HighscoreScreen(userName, navController, buttonMediaPlayer, retroViewModel) }
-                                composable("vrscreen") { VRScreen(userName, navController, buttonMediaPlayer, retroViewModel) }
-                                /*composable("menu") { MenuScreen(navController, buttonMediaPlayer) }
-                                composable("highscore") { HighscoreScreen(navController, buttonMediaPlayer) }*/
+                                composable("selectionscreen") { SelectionScreen(navController) }
+                                composable(
+                                    "vrscreen/{environmentFile}",
+                                    arguments = listOf(navArgument("environmentFile") { type = NavType.StringType })
+                                ) { backStackEntry ->
+                                    val environmentFile = backStackEntry.arguments?.getString("environmentFile") ?: "environments/sky_2k.hdr"
+                                    VRScreen(userName, navController, buttonMediaPlayer, retroViewModel, environmentFile)
+                                }
                             }
                         }
                     }
@@ -237,7 +234,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-
 @Composable
 fun UserRegistrationScreen(onEnterClick: (String) -> Unit) {
     var username by remember { mutableStateOf("") }
@@ -285,8 +281,6 @@ fun UserRegistrationScreen(onEnterClick: (String) -> Unit) {
     }
 }
 
-
-
 @Composable
 fun MenuScreen(userName: String, navController: NavController, buttonMediaPlayer: MediaPlayer){
 
@@ -312,7 +306,7 @@ fun MenuScreen(userName: String, navController: NavController, buttonMediaPlayer
             Row(verticalAlignment = Alignment.CenterVertically){
                 ElevatedButton(
                     onClick = {
-                        navController.navigate("vrscreen")
+                        navController.navigate("selectionscreen")
                         buttonMediaPlayer.start()
                     },
                     modifier = Modifier.width(150.dp),
@@ -335,6 +329,19 @@ fun MenuScreen(userName: String, navController: NavController, buttonMediaPlayer
                     Text("HIGHSCORE",fontWeight = FontWeight.Bold, color = Color.White)
                 }
 
+                /*Spacer(modifier = Modifier.width(30.dp))
+
+                ElevatedButton(onClick = {
+                    navController.navigate("arscreen")
+                    buttonMediaPlayer.start()
+                },
+                    modifier = Modifier.width(150.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(31, 111, 139, 255)),
+                    border = BorderStroke(2.dp, Color(22, 89, 112, 120))
+                ) {
+                    Text("AR MODELS",fontWeight = FontWeight.Bold, color = Color.White)
+                }*/
+
             }
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -352,13 +359,7 @@ fun MenuScreen(userName: String, navController: NavController, buttonMediaPlayer
 data class ScoreEntry(val username: String, val score: Int, val date: String)
 
 @Composable
-fun HighscoreScreen(
-    userName: String,
-    navController: NavController,
-    buttonMediaPlayer: MediaPlayer,
-    retroViewModel: RetroViewModel,
-    modifier: Modifier = Modifier
-) {
+fun HighscoreScreen(userName: String, navController: NavController, buttonMediaPlayer: MediaPlayer, retroViewModel: RetroViewModel, modifier: Modifier = Modifier) {
     val mContext = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var score by remember { mutableStateOf("Loading...") }
@@ -490,9 +491,6 @@ fun HighscoreScreen(
     }
 }
 
-
-
-
 fun formatDate(inputDate: String): String {
     // Define the input and output date formats
     val inputFormat = SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z", Locale.ENGLISH)
@@ -505,11 +503,92 @@ fun formatDate(inputDate: String): String {
     return outputFormat.format(date)
 }
 
+@Composable
+fun SelectionScreen(navController: NavController) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Color.Transparent
+    ) {
+        // Background and overlay
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .paint(
+                    painter = painterResource(id = R.drawable.scoreback),
+                    contentScale = ContentScale.FillBounds
+                )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f))
+            ){
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.Top,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Spacer(modifier = Modifier.height(70.dp))
 
+                    Text("Select Environment", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
 
+                    Spacer(modifier = Modifier.height(50.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        EnvironmentButton(
+                            text = "Blue Sky",
+                            imageUrl = R.drawable.bluesky
+                        ) { navController.navigate("vrscreen/sky_2k.hdr") }
+                        EnvironmentButton(
+                            text = "Nebula",
+                            imageUrl = R.drawable.nebula
+                        ) { navController.navigate("vrscreen/Nebula2.hdr") }
+
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
-fun VRScreen(userName: String, navController: NavController, buttonMediaPlayer: MediaPlayer, retroViewModel: RetroViewModel) {
+fun EnvironmentButton(text: String, imageUrl: Int, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(150.dp)
+            .clickable(onClick = onClick)
+            .border(2.dp, Color.White)
+    ) {
+        Image(
+            painter = painterResource(id = imageUrl),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.5f))
+        )
+        Text(
+            text = text,
+            color = Color.White,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(8.dp),
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+fun VRScreen(userName: String, navController: NavController, buttonMediaPlayer: MediaPlayer, retroViewModel: RetroViewModel, environmentFile: String) {
 
     val mContext = LocalContext.current
     val laserMediaPlayer = MediaPlayer.create(mContext, R.raw.laser)
@@ -556,12 +635,12 @@ fun VRScreen(userName: String, navController: NavController, buttonMediaPlayer: 
     fun onCountdownEnd() {
         showPopup = true
     }
-
+    /*
     // Timer bar logic
     val totalTime = 40000L
     val timeBarWidth by remember { derivedStateOf { (timeLeft.toFloat() / totalTime.toFloat()) * 100f } }
     val timeBarColor by remember { derivedStateOf { if (timeLeft <= 5000L) Color.Red else Color.Green } }
-
+    */
 
     // Countdown timer logic
     LaunchedEffect(isTimerRunning) {
@@ -657,7 +736,6 @@ fun VRScreen(userName: String, navController: NavController, buttonMediaPlayer: 
     }
 
 
-
     Scene(
         modifier = Modifier.fillMaxSize(),
         engine = engine,
@@ -665,7 +743,7 @@ fun VRScreen(userName: String, navController: NavController, buttonMediaPlayer: 
         cameraNode = cameraNode,
         childNodes = listObjects,
         environment = environmentLoader.createHDREnvironment(
-            assetFileLocation = "environments/sky_2k.hdr"
+            assetFileLocation = "environments/"+environmentFile
             //assetFileLocation = "environments/Nebula2.hdr"
         )!!,
         onFrame = {
@@ -701,7 +779,7 @@ fun VRScreen(userName: String, navController: NavController, buttonMediaPlayer: 
                     explosionMediaPlayer.start()
 
                     iterator.remove()
-                    playerscore += 1
+                    playerscore++
 
                 }
             }
@@ -863,9 +941,6 @@ fun VRScreen(userName: String, navController: NavController, buttonMediaPlayer: 
 
 }
 
-
-
-
 @Composable
 fun rememberGyroscopeRotation(): State<Rotation> {
     val context = LocalContext.current
@@ -909,7 +984,6 @@ fun rememberGyroscopeRotation(): State<Rotation> {
 
     return rotationState
 }
-
 
 fun getScore(username: String, retroViewModel: RetroViewModel): String {
     var userMaxScore = ""
