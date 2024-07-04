@@ -88,6 +88,26 @@ import io.github.sceneview.rememberView
 import kotlin.math.PI
 import kotlin.math.pow
 import kotlin.math.sqrt
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.ui.res.stringResource
+import com.google.android.filament.Engine
+import com.google.ar.core.Anchor
+import com.google.ar.core.Config
+import com.google.ar.core.Frame
+import com.google.ar.core.Plane
+import com.google.ar.core.TrackingFailureReason
+import io.github.sceneview.ar.ARScene
+import io.github.sceneview.ar.arcore.createAnchorOrNull
+import io.github.sceneview.ar.arcore.getUpdatedPlanes
+import io.github.sceneview.ar.arcore.isValid
+import io.github.sceneview.ar.getDescription
+import io.github.sceneview.ar.node.AnchorNode
+import io.github.sceneview.ar.rememberARCameraNode
+import io.github.sceneview.loaders.MaterialLoader
+import io.github.sceneview.loaders.ModelLoader
+import io.github.sceneview.model.ModelInstance
+import io.github.sceneview.node.CubeNode
+import io.github.sceneview.rememberOnGestureListener
 
 val viewModel = RetroViewModel()
 var ship_path = "models/ship.glb"
@@ -153,6 +173,7 @@ class MainActivity : ComponentActivity() {
                                     val environmentFile = backStackEntry.arguments?.getString("environmentFile") ?: "environments/sky_2k.hdr"
                                     VRScreen(userName, navController, buttonMediaPlayer, retroViewModel, environmentFile)
                                 }
+                                composable("arscreen") { ARScreen()}
                             }
                         }
                     }
@@ -329,7 +350,7 @@ fun MenuScreen(userName: String, navController: NavController, buttonMediaPlayer
                     Text("HIGHSCORE",fontWeight = FontWeight.Bold, color = Color.White)
                 }
 
-                /*Spacer(modifier = Modifier.width(30.dp))
+                Spacer(modifier = Modifier.width(30.dp))
 
                 ElevatedButton(onClick = {
                     navController.navigate("arscreen")
@@ -339,8 +360,8 @@ fun MenuScreen(userName: String, navController: NavController, buttonMediaPlayer
                     colors = ButtonDefaults.buttonColors(containerColor = Color(31, 111, 139, 255)),
                     border = BorderStroke(2.dp, Color(22, 89, 112, 120))
                 ) {
-                    Text("AR MODELS",fontWeight = FontWeight.Bold, color = Color.White)
-                }*/
+                    Text("AR MODEL",fontWeight = FontWeight.Bold, color = Color.White)
+                }
 
             }
 
@@ -985,6 +1006,147 @@ fun rememberGyroscopeRotation(): State<Rotation> {
     return rotationState
 }
 
+@Composable
+fun ARScreen(){
+    Box(
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        val engine = rememberEngine()
+        val modelLoader = rememberModelLoader(engine)
+        val materialLoader = rememberMaterialLoader(engine)
+        val cameraNode = rememberARCameraNode(engine)
+        val childNodes = rememberNodes()
+        val view = rememberView(engine)
+        val collisionSystem = rememberCollisionSystem(view)
+
+        var planeRenderer by remember { mutableStateOf(true) }
+
+        val modelInstances = remember { mutableListOf<ModelInstance>() }
+        var trackingFailureReason by remember {
+            mutableStateOf<TrackingFailureReason?>(null)
+        }
+        var frame by remember { mutableStateOf<Frame?>(null) }
+        ARScene(
+            modifier = Modifier.fillMaxSize(),
+            childNodes = childNodes,
+            engine = engine,
+            view = view,
+            modelLoader = modelLoader,
+            collisionSystem = collisionSystem,
+            sessionConfiguration = { session, config ->
+                config.depthMode =
+                    when (session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)) {
+                        true -> Config.DepthMode.AUTOMATIC
+                        else -> Config.DepthMode.DISABLED
+                    }
+                config.instantPlacementMode = Config.InstantPlacementMode.LOCAL_Y_UP
+                config.lightEstimationMode =
+                    Config.LightEstimationMode.ENVIRONMENTAL_HDR
+            },
+            cameraNode = cameraNode,
+            planeRenderer = planeRenderer,
+            onTrackingFailureChanged = {
+                trackingFailureReason = it
+            },
+            onSessionUpdated = { session, updatedFrame ->
+                frame = updatedFrame
+
+                if (childNodes.isEmpty()) {
+                    updatedFrame.getUpdatedPlanes()
+                        .firstOrNull { it.type == Plane.Type.HORIZONTAL_UPWARD_FACING }
+                        ?.let { it.createAnchorOrNull(it.centerPose) }?.let { anchor ->
+                            childNodes += createAnchorNode(
+                                engine = engine,
+                                modelLoader = modelLoader,
+                                materialLoader = materialLoader,
+                                modelInstances = modelInstances,
+                                anchor = anchor
+                            )
+                        }
+                }
+            },
+            onGestureListener = rememberOnGestureListener(
+                onSingleTapConfirmed = { motionEvent, node ->
+                    if (node == null) {
+                        val hitResults = frame?.hitTest(motionEvent.x, motionEvent.y)
+                        hitResults?.firstOrNull {
+                            it.isValid(
+                                depthPoint = false,
+                                point = false
+                            )
+                        }?.createAnchorOrNull()
+                            ?.let { anchor ->
+                                planeRenderer = false
+                                childNodes += createAnchorNode(
+                                    engine = engine,
+                                    modelLoader = modelLoader,
+                                    materialLoader = materialLoader,
+                                    modelInstances = modelInstances,
+                                    anchor = anchor
+                                )
+                            }
+                    }
+                })
+        )
+        Text(
+            modifier = Modifier
+                .systemBarsPadding()
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .padding(top = 16.dp, start = 32.dp, end = 32.dp),
+            textAlign = TextAlign.Center,
+            fontSize = 28.sp,
+            color = Color.White,
+            text = trackingFailureReason?.let {
+                it.getDescription(LocalContext.current)
+            } ?: if (childNodes.isEmpty()) {
+                stringResource(R.string.point_your_phone_down)
+            } else {
+                stringResource(R.string.tap_anywhere_to_add_model)
+            }
+        )
+    }
+}
+
+fun createAnchorNode(
+    engine: Engine,
+    modelLoader: ModelLoader,
+    materialLoader: MaterialLoader,
+    modelInstances: MutableList<ModelInstance>,
+    anchor: Anchor
+): AnchorNode {
+    val anchorNode = AnchorNode(engine = engine, anchor = anchor)
+    val modelNode = ModelNode(
+        modelInstance = modelInstances.apply {
+            if (isEmpty()) {
+                this += modelLoader.createInstancedModel(ship_path, 5)
+            }
+        }.removeLast(),
+        // Scale to fit in a 0.5 meters cube
+        scaleToUnits = 0.5f
+    ).apply {
+        // Model Node needs to be editable for independent rotation from the anchor rotation
+        isEditable = true
+    }
+    val boundingBoxNode = CubeNode(
+        engine,
+        size = modelNode.extents,
+        center = modelNode.center,
+        materialInstance = materialLoader.createColorInstance(Color.White.copy(alpha = 0.5f))
+    ).apply {
+        isVisible = false
+    }
+    modelNode.addChildNode(boundingBoxNode)
+    anchorNode.addChildNode(modelNode)
+
+    listOf(modelNode, anchorNode).forEach {
+        it.onEditingChanged = { editingTransforms ->
+            boundingBoxNode.isVisible = editingTransforms.isNotEmpty()
+        }
+    }
+    return anchorNode
+}
+
 fun getScore(username: String, retroViewModel: RetroViewModel): String {
     var userMaxScore = ""
     retroViewModel.getScore(username)
@@ -1034,104 +1196,3 @@ fun updateScore(username: String, score: Int, retroViewModel: RetroViewModel) {
     }
 }
 
-
-
-
-//---------------TEST OF ARSCENE
-/*
-// The destroy calls are automatically made when their disposable effect leaves
-// the composition or its key changes.
-val engine = rememberEngine()
-val modelLoader = rememberModelLoader(engine)
-val materialLoader = rememberMaterialLoader(engine)
-val cameraNode = rememberARCameraNode(engine)
-val childNodes = rememberNodes()
-val view = rememberView(engine)
-val collisionSystem = rememberCollisionSystem(view)
-
-var planeRenderer by remember { mutableStateOf(true) }
-
-var trackingFailureReason by remember {
-    mutableStateOf<TrackingFailureReason?>(null)
-}
-var frame by remember { mutableStateOf<Frame?>(null) }
-
-ARScene(
-    modifier = Modifier.fillMaxSize(),
-    childNodes = childNodes,
-    engine = engine,
-    view = view,
-    modelLoader = modelLoader,
-    collisionSystem = collisionSystem,
-    sessionConfiguration = { session, config ->
-        config.depthMode =
-            when (session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)) {
-                true -> Config.DepthMode.AUTOMATIC
-                else -> Config.DepthMode.DISABLED
-            }
-        config.instantPlacementMode = Config.InstantPlacementMode.LOCAL_Y_UP
-        config.lightEstimationMode =
-            Config.LightEstimationMode.ENVIRONMENTAL_HDR
-    },
-    cameraNode = cameraNode,
-    planeRenderer = planeRenderer,
-    onTrackingFailureChanged = {
-        trackingFailureReason = it
-    },
-    onSessionUpdated = { session, updatedFrame ->
-        frame = updatedFrame
-
-        if (childNodes.isEmpty()) {
-            updatedFrame.getUpdatedPlanes()
-                .firstOrNull { it.type == Plane.Type.HORIZONTAL_UPWARD_FACING }
-                ?.let { it.createAnchorOrNull(it.centerPose) }?.let { anchor ->
-                    childNodes += createAnchorNode(
-                        engine = engine,
-                        modelLoader = modelLoader,
-                        materialLoader = materialLoader,
-                        anchor = anchor
-                    )
-                }
-        }
-    },
-    onGestureListener = rememberOnGestureListener(
-        onSingleTapConfirmed = { motionEvent, node ->
-            if (node == null) {
-                val hitResults = frame?.hitTest(motionEvent.x, motionEvent.y)
-                hitResults?.firstOrNull {
-                    it.isValid(
-                        depthPoint = false,
-                        point = false
-                    )
-                }?.createAnchorOrNull()
-                    ?.let { anchor ->
-                        planeRenderer = false
-                        childNodes += createAnchorNode(
-                            engine = engine,
-                            modelLoader = modelLoader,
-                            materialLoader = materialLoader,
-                            anchor = anchor
-                        )
-                    }
-            }
-        })
-
-)
-Text(
-    modifier = Modifier
-        .systemBarsPadding()
-        .fillMaxWidth()
-        .padding(top = 16.dp, start = 32.dp, end = 32.dp),
-    textAlign = TextAlign.Center,
-    fontSize = 28.sp,
-    color = Color.White,
-    text = trackingFailureReason?.let {
-        it.getDescription(LocalContext.current)
-    } ?: if (childNodes.isEmpty()) {
-        stringResource(R.string.point_your_phone_down)
-    } else {
-        stringResource(R.string.tap_anywhere_to_add_model)
-    }
-)*/
-
-//---------------END TEST
