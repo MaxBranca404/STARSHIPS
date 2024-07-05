@@ -935,8 +935,8 @@ fun VRScreen(userName: String, navController: NavController, buttonMediaPlayer: 
             confirmButton = {
                 ElevatedButton(onClick = {
                     showPopup = false
-                    navController.navigate("vrscreen") {
-                        popUpTo("vrscreen") { inclusive = true }
+                    navController.navigate("selectionscreen") {
+                        popUpTo("selectionscreen") { inclusive = true }
                     }
                 }
                 ) {
